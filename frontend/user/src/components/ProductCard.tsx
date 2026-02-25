@@ -1,7 +1,10 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { Heart, ShoppingBag } from 'lucide-react';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Heart, ShoppingBag, Check } from 'lucide-react';
 import { formatPrice } from '@/utils/formatPrice';
+import { useCart } from '@/contexts/CartContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useWishlist } from '@/contexts/WishlistContext';
 import type { Product } from '@/types';
 
 interface ProductCardProps {
@@ -9,6 +12,44 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product }: ProductCardProps) {
+    const navigate = useNavigate();
+    const { addToCart } = useCart();
+    const { isAuthenticated } = useAuth();
+    const { isInWishlist, addToWishlist, removeFromWishlist } = useWishlist();
+    const [selectedColor, setSelectedColor] = useState(product.colors[0]);
+    const [addedToCart, setAddedToCart] = useState(false);
+
+    const inWishlist = isInWishlist(product.id);
+
+    const handleWishlist = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!isAuthenticated) {
+            navigate('/login', { state: { from: { pathname: `/product/${product.id}` } } });
+            return;
+        }
+        if (inWishlist) {
+            removeFromWishlist(product.id);
+        } else {
+            addToWishlist(product);
+        }
+    };
+
+    const handleAddToCart = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const defaultSize = product.sizes?.[0] || 'M';
+        addToCart(product, 1, defaultSize, selectedColor);
+        setAddedToCart(true);
+        setTimeout(() => setAddedToCart(false), 1500);
+    };
+
+    const handleColorClick = (e: React.MouseEvent, color: string) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setSelectedColor(color);
+    };
+
     return (
         <Link to={`/product/${product.id}`} className="group block">
             <div className="relative overflow-hidden rounded-2xl bg-gray-100 aspect-[3/4] mb-3">
@@ -41,26 +82,36 @@ export default function ProductCard({ product }: ProductCardProps) {
                 {/* Quick actions */}
                 <div className="absolute top-3 right-3 flex flex-col gap-2 opacity-0 translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0">
                     <button
-                        onClick={(e) => { e.preventDefault(); }}
-                        className="w-9 h-9 bg-white rounded-full shadow-md flex items-center justify-center text-gray-600 hover:text-red-500 transition-colors"
+                        onClick={handleWishlist}
+                        className={`w-9 h-9 rounded-full shadow-md flex items-center justify-center transition-colors ${inWishlist
+                                ? 'bg-red-50 text-red-500'
+                                : 'bg-white text-gray-600 hover:text-red-500'
+                            }`}
                     >
-                        <Heart size={16} />
+                        <Heart size={16} className={inWishlist ? 'fill-red-500' : ''} />
                     </button>
                     <button
-                        onClick={(e) => { e.preventDefault(); }}
-                        className="w-9 h-9 bg-white rounded-full shadow-md flex items-center justify-center text-gray-600 hover:text-brand-accent transition-colors"
+                        onClick={handleAddToCart}
+                        className={`w-9 h-9 rounded-full shadow-md flex items-center justify-center transition-colors ${addedToCart
+                                ? 'bg-green-500 text-white'
+                                : 'bg-white text-gray-600 hover:text-brand-accent'
+                            }`}
                     >
-                        <ShoppingBag size={16} />
+                        {addedToCart ? <Check size={16} /> : <ShoppingBag size={16} />}
                     </button>
                 </div>
 
-                {/* Color options */}
+                {/* Color options — now clickable */}
                 {product.colors.length > 0 && (
                     <div className="absolute bottom-3 left-3 flex gap-1.5">
                         {product.colors.map((color) => (
-                            <span
+                            <button
                                 key={color}
-                                className="w-4 h-4 rounded-full border-2 border-white shadow-sm"
+                                onClick={(e) => handleColorClick(e, color)}
+                                className={`w-5 h-5 rounded-full border-2 shadow-sm transition-transform ${selectedColor === color
+                                        ? 'border-white scale-125 ring-2 ring-brand-accent'
+                                        : 'border-white'
+                                    }`}
                                 style={{ backgroundColor: color }}
                             />
                         ))}

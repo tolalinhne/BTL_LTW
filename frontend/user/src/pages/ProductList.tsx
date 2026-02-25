@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { SlidersHorizontal, Grid3X3, LayoutList, ChevronDown } from 'lucide-react';
 import ProductCard from '@/components/ProductCard';
 import type { Product } from '@/types';
@@ -14,6 +14,14 @@ const ALL_PRODUCTS: Product[] = [
     { id: '6', name: 'Signature Tote Bag', price: 320000, image: 'https://picsum.photos/seed/bag1/600/800', category: 'Accessories', colors: ['#8b4513'] },
     { id: '7', name: 'Elegant Evening Gown', price: 1500000, image: 'https://picsum.photos/seed/gown1/600/800', category: 'Dresses', colors: ['#1a1a1a', '#800020'], isNew: true },
     { id: '8', name: 'Casual Cotton Tee', price: 195000, image: 'https://picsum.photos/seed/tee1/600/800', category: 'Tops', colors: ['#ffffff', '#f0f0f0', '#d4a574'] },
+];
+
+const CATEGORIES = [
+    { name: 'Signature', icon: '✨', slug: 'signature' },
+    { name: 'Đầm', icon: '👗', slug: 'dresses' },
+    { name: 'Áo', icon: '👕', slug: 'tops' },
+    { name: 'Quần', icon: '👖', slug: 'pants' },
+    { name: 'Phụ kiện', icon: '👜', slug: 'accessories' },
 ];
 
 const SORT_OPTIONS = [
@@ -49,6 +57,31 @@ export default function ProductList() {
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {/* Categories */}
+            <section className="py-8 mb-6">
+                <h2 className="text-2xl font-bold text-center mb-10">Danh mục sản phẩm</h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                    {CATEGORIES.map((cat) => (
+                        <Link
+                            key={cat.slug}
+                            to={`/products/${cat.slug}`}
+                            className={`flex flex-col items-center gap-3 p-6 rounded-2xl hover:shadow-md transition-all group ${category === cat.slug
+                                ? 'bg-brand-accent/10 shadow-md border border-brand-accent/20'
+                                : 'bg-gray-50 hover:bg-brand-accent/5'
+                                }`}
+                        >
+                            <span className="text-3xl">{cat.icon}</span>
+                            <span className={`text-sm font-medium transition-colors ${category === cat.slug
+                                ? 'text-brand-accent'
+                                : 'text-gray-700 group-hover:text-brand-accent'
+                                }`}>
+                                {cat.name}
+                            </span>
+                        </Link>
+                    ))}
+                </div>
+            </section>
+
             {/* Breadcrumb */}
             <nav className="text-sm text-gray-500 mb-6">
                 <span className="hover:text-brand-primary cursor-pointer">Trang chủ</span>
@@ -98,8 +131,8 @@ export default function ProductList() {
             {/* Product Grid */}
             {filteredProducts.length > 0 ? (
                 <div className={`grid gap-6 ${gridCols === 3
-                        ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
-                        : 'grid-cols-1 sm:grid-cols-2'
+                    ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
+                    : 'grid-cols-1 sm:grid-cols-2'
                     }`}>
                     {filteredProducts.map((product) => (
                         <ProductCard key={product.id} product={product} />

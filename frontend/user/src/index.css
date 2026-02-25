@@ -17,7 +17,12 @@
     @apply bg-brand-bg text-brand-primary font-sans antialiased;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-serif;
   }
 }
@@ -25,7 +30,26 @@
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* Fly-to-cart animation */
+@keyframes flyToCart {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+
+  70% {
+    transform: translate(var(--fly-end-x), var(--fly-end-y)) scale(0.4);
+    opacity: 0.8;
+  }
+
+  100% {
+    transform: translate(var(--fly-end-x), var(--fly-end-y)) scale(0);
+    opacity: 0;
+  }
 }

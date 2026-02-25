@@ -7,8 +7,8 @@ export default function Login() {
     const navigate = useNavigate();
     const location = useLocation();
     const { login } = useAuth();
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
+    const [email, setEmail] = useState('test@lili.vn');
+    const [password, setPassword] = useState('123456');
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -26,7 +26,8 @@ export default function Login() {
             const mockUser = {
                 id: '1',
                 email,
-                name: 'Khách hàng',
+                name: 'Nguyễn Văn Test',
+                phone: '0901234567',
                 role: 'customer' as const,
             };
             login('mock-jwt-token', mockUser);
@@ -49,7 +50,12 @@ export default function Login() {
                 </div>
 
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8">
-                    <form onSubmit={handleSubmit} className="space-y-5">
+                    {/* Test account hint */}
+                    <div className="mb-5 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                        <p className="text-xs font-semibold text-blue-700 mb-1">🧪 Tài khoản test:</p>
+                        <p className="text-xs text-blue-600">Email: <code className="font-mono bg-blue-100 px-1 rounded">test@lili.vn</code></p>
+                        <p className="text-xs text-blue-600">Mật khẩu: <code className="font-mono bg-blue-100 px-1 rounded">123456</code></p>
+                    </div>                    <form onSubmit={handleSubmit} className="space-y-5">
                         {error && (
                             <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg text-center">{error}</div>
                         )}

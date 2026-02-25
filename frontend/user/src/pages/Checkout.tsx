@@ -1,12 +1,32 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { CreditCard, Banknote, ChevronRight } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { CreditCard, Banknote, ChevronRight, ArrowLeft } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
 import { formatPrice } from '@/utils/formatPrice';
 
 export default function Checkout() {
     const navigate = useNavigate();
-    const { cart, subtotal, clearCart } = useCart();
+    const location = useLocation();
+    const { cart, clearCart } = useCart();
+
+    // Get selected keys from Cart page via route state
+    const selectedKeys: string[] = (location.state as any)?.selectedKeys || [];
+
+    const getItemKey = (item: typeof cart[0]) => `${item.id}-${item.selectedSize}-${item.selectedColor}`;
+
+    const checkoutItems = useMemo(() => {
+        if (selectedKeys.length === 0) return cart; // fallback: checkout all
+        return cart.filter((item) => selectedKeys.includes(getItemKey(item)));
+    }, [cart, selectedKeys]);
+
+    const subtotal = useMemo(
+        () => checkoutItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
+        [checkoutItems]
+    );
+
+    const shippingFee = subtotal >= 500000 ? 0 : 30000;
+    const total = subtotal + shippingFee;
+
     const [form, setForm] = useState({
         name: '',
         phone: '',
@@ -17,25 +37,41 @@ export default function Checkout() {
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const shippingFee = subtotal >= 500000 ? 0 : 30000;
-    const total = subtotal + shippingFee;
-
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         setForm({ ...form, [e.target.name]: e.target.value });
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (checkoutItems.length === 0) return;
         setIsSubmitting(true);
-        // Simulate API call
         await new Promise((r) => setTimeout(r, 1500));
         clearCart();
         navigate('/order-success');
     };
 
+    if (checkoutItems.length === 0) {
+        return (
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
+                <p className="text-gray-500 mb-4">Không có sản phẩm nào được chọn để thanh toán.</p>
+                <Link
+                    to="/cart"
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-brand-primary text-white text-sm font-semibold rounded-full hover:bg-brand-primary/90 transition-colors"
+                >
+                    <ArrowLeft size={16} /> Quay lại giỏ hàng
+                </Link>
+            </div>
+        );
+    }
+
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <h1 className="text-2xl sm:text-3xl font-bold mb-8">Thanh toán</h1>
+            <div className="flex items-center gap-3 mb-8">
+                <Link to="/cart" className="p-2 text-gray-400 hover:text-brand-primary rounded-lg hover:bg-gray-50 transition-colors">
+                    <ArrowLeft size={20} />
+                </Link>
+                <h1 className="text-2xl sm:text-3xl font-bold">Thanh toán</h1>
+            </div>
 
             <form onSubmit={handleSubmit}>
                 <div className="grid lg:grid-cols-3 gap-8">
@@ -99,16 +135,18 @@ export default function Checkout() {
 
                     {/* Summary */}
                     <div className="bg-white rounded-xl border border-gray-100 p-6 h-fit shadow-sm sticky top-24">
-                        <h3 className="text-lg font-semibold mb-4">Đơn hàng</h3>
-                        <div className="space-y-3 mb-4">
-                            {cart.map((item) => (
-                                <div key={`${item.id}-${item.selectedSize}`} className="flex items-center gap-3">
+                        <h3 className="text-lg font-semibold mb-4">Đơn hàng ({checkoutItems.length} sản phẩm)</h3>
+                        <div className="space-y-3 mb-4 max-h-60 overflow-y-auto">
+                            {checkoutItems.map((item) => (
+                                <div key={getItemKey(item)} className="flex items-center gap-3">
                                     <div className="w-12 h-14 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
                                         <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-medium truncate">{item.name}</p>
-                                        <p className="text-xs text-gray-500">x{item.quantity}</p>
+                                        <p className="text-xs text-gray-500">
+                                            {item.selectedSize} · x{item.quantity}
+                                        </p>
                                     </div>
                                     <p className="text-sm font-medium">{formatPrice(item.price * item.quantity)}</p>
                                 </div>

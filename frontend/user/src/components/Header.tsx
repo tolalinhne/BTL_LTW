@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { ShoppingBag, User, Search, Menu, X, Heart, LogOut } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCart } from '@/contexts/CartContext';
@@ -10,13 +10,18 @@ export default function Header() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
     const navigate = useNavigate();
+    const location = useLocation();
+
+    const isActiveLink = (to: string) => {
+        if (to === '/') return location.pathname === '/';
+        return location.pathname.startsWith(to);
+    };
 
     const navLinks = [
         { to: '/', label: 'Trang chủ' },
         { to: '/products', label: 'Sản phẩm' },
-        { to: '/products/dresses', label: 'Đầm' },
-        { to: '/products/tops', label: 'Áo' },
-        { to: '/products/accessories', label: 'Phụ kiện' },
+        { to: '/saleoff', label: 'Sale-Off' },
+        { to: '/store', label: 'Cửa hàng' },
     ];
 
     return (
@@ -40,16 +45,21 @@ export default function Header() {
 
                     {/* Desktop Nav */}
                     <nav className="hidden lg:flex items-center gap-8">
-                        {navLinks.map((link) => (
-                            <Link
-                                key={link.to}
-                                to={link.to}
-                                className="text-sm font-medium text-gray-600 hover:text-brand-primary transition-colors relative group"
-                            >
-                                {link.label}
-                                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-accent transition-all group-hover:w-full" />
-                            </Link>
-                        ))}
+                        {navLinks.map((link) => {
+                            const active = isActiveLink(link.to);
+                            return (
+                                <Link
+                                    key={link.to}
+                                    to={link.to}
+                                    className={`text-sm font-medium transition-colors relative group ${active ? 'text-brand-primary' : 'text-gray-600 hover:text-brand-primary'
+                                        }`}
+                                >
+                                    {link.label}
+                                    <span className={`absolute -bottom-1 left-0 h-0.5 bg-brand-accent transition-all ${active ? 'w-full' : 'w-0 group-hover:w-full'
+                                        }`} />
+                                </Link>
+                            );
+                        })}
                     </nav>
 
                     {/* Actions */}
@@ -61,11 +71,14 @@ export default function Header() {
                             <Search size={20} />
                         </button>
 
-                        <button className="p-2 text-gray-600 hover:text-brand-primary transition-colors hidden sm:block">
+                        <Link
+                            to={isAuthenticated ? '/wishlist' : '/login'}
+                            className="p-2 text-gray-600 hover:text-red-500 transition-colors hidden sm:block relative"
+                        >
                             <Heart size={20} />
-                        </button>
+                        </Link>
 
-                        <Link to="/cart" className="p-2 text-gray-600 hover:text-brand-primary transition-colors relative">
+                        <Link to="/cart" id="header-cart-icon" className="p-2 text-gray-600 hover:text-brand-primary transition-colors relative">
                             <ShoppingBag size={20} />
                             {itemCount > 0 && (
                                 <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-brand-accent text-white text-[10px] font-bold rounded-full flex items-center justify-center">
@@ -131,16 +144,22 @@ export default function Header() {
             {mobileMenuOpen && (
                 <div className="lg:hidden border-t border-gray-100 bg-white">
                     <nav className="px-4 py-3 space-y-1">
-                        {navLinks.map((link) => (
-                            <Link
-                                key={link.to}
-                                to={link.to}
-                                onClick={() => setMobileMenuOpen(false)}
-                                className="block px-3 py-2.5 text-sm font-medium text-gray-600 hover:text-brand-primary hover:bg-gray-50 rounded-lg transition-colors"
-                            >
-                                {link.label}
-                            </Link>
-                        ))}
+                        {navLinks.map((link) => {
+                            const active = isActiveLink(link.to);
+                            return (
+                                <Link
+                                    key={link.to}
+                                    to={link.to}
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className={`block px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${active
+                                        ? 'text-brand-primary bg-brand-accent/5 border-l-2 border-brand-accent'
+                                        : 'text-gray-600 hover:text-brand-primary hover:bg-gray-50'
+                                        }`}
+                                >
+                                    {link.label}
+                                </Link>
+                            );
+                        })}
                         {!isAuthenticated && (
                             <Link
                                 to="/login"

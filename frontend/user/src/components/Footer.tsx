@@ -29,10 +29,16 @@ export default function Footer() {
                     <div>
                         <h4 className="font-semibold text-sm uppercase tracking-wider mb-4 text-brand-accent">Danh mục</h4>
                         <ul className="space-y-2.5">
-                            {['Đầm', 'Áo', 'Quần', 'Phụ kiện', 'Sale'].map((item) => (
-                                <li key={item}>
-                                    <Link to="/products" className="text-sm text-gray-400 hover:text-white transition-colors">
-                                        {item}
+                            {[
+                                { label: 'Đầm', to: '/products/dresses' },
+                                { label: 'Áo', to: '/products/tops' },
+                                { label: 'Quần', to: '/products/pants' },
+                                { label: 'Phụ kiện', to: '/products/accessories' },
+                                { label: 'Sale', to: '/products/sale' },
+                            ].map((item) => (
+                                <li key={item.to}>
+                                    <Link to={item.to} className="text-sm text-gray-400 hover:text-white transition-colors">
+                                        {item.label}
                                     </Link>
                                 </li>
                             ))}

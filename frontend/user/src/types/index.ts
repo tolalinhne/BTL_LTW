@@ -81,6 +81,15 @@ export interface Category {
     slug: string;
 }
 
+// ===== Review =====
+export interface Review {
+    id: string;
+    userName: string;
+    rating: number; // 1-5
+    comment: string;
+    createdAt: string;
+}
+
 // ===== API Response =====
 export interface ApiResponse<T> {
     data: T;
