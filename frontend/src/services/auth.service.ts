@@ -1,28 +1,33 @@
-import api from './api';
-import type { LoginCredentials, RegisterData, AuthResponse } from '@/types/shared.types';
+import api from '@/services/api';
+import type { LoginCredentials, RegisterData, AuthResponse, ApiResponse, User } from '@/types/shared.types';
 
 export const authService = {
     login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
-        const { data } = await api.post<AuthResponse>('/auth/login', credentials);
-        return data;
+        const res = await api.post('/auth/login', credentials);
+        return res.data?.data;
     },
 
     register: async (userData: RegisterData): Promise<AuthResponse> => {
-        const { data } = await api.post<AuthResponse>('/auth/register', userData);
-        return data;
+        const res = await api.post('/auth/register', userData);
+        return res.data?.data;
     },
 
-    getProfile: async () => {
-        const { data } = await api.get('/auth/profile');
-        return data;
+    getProfile: async (): Promise<User> => {
+        const res = await api.get('/auth/profile');
+        return res.data?.data;
     },
 
-    updateProfile: async (profileData: Partial<RegisterData>) => {
-        const { data } = await api.put('/auth/profile', profileData);
-        return data;
+    updateProfile: async (profileData: Partial<RegisterData>): Promise<User> => {
+        const res = await api.put('/auth/profile', profileData);
+        return res.data?.data;
     },
 
     logout: async () => {
-        await api.post('/auth/logout');
+        // Backend doesn't have a logout endpoint — just clear tokens locally
     },
+
+    refreshToken: async (token: string): Promise<{ accessToken: string }> => {
+        const res = await api.post('/auth/refresh', { refreshToken: token });
+        return res.data?.data;
+    }
 };

@@ -5,6 +5,8 @@ import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatPrice } from '@/utils/formatPrice';
 import type { Address } from '@/types/user.types';
+import { orderService } from '@/services/order.service';
+import PaymentQRModal from '@/components/PaymentQRModal';
 
 const ADDRESSES_KEY = 'lili_user_addresses';
 
@@ -58,6 +60,13 @@ export default function Checkout() {
         paymentMethod: 'cod',
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // QR Modal state (khi thanh toán chuyển khoản)
+    const [qrModal, setQrModal] = useState<{
+        orderId: number;
+        orderCode: string;
+        total: number;
+    } | null>(null);
 
     // Address picker modal
     const [showAddressPicker, setShowAddressPicker] = useState(false);
@@ -120,12 +129,44 @@ export default function Checkout() {
         e.preventDefault();
         if (checkoutItems.length === 0) return;
         setIsSubmitting(true);
-        await new Promise((r) => setTimeout(r, 1500));
-        clearCart();
-        navigate('/order-success');
+        
+        try {
+            const orderData = {
+                items: checkoutItems,
+                shippingAddress: form.address,
+                customerName: form.name,
+                customerPhone: form.phone,
+                paymentMethod: form.paymentMethod,
+                note: form.note,
+            };
+
+            const response = await orderService.create(orderData);
+            if (response.success) {
+                clearCart();
+                if (form.paymentMethod === 'bank') {
+                    // Hiện QR modal thay vì navigate ngay
+                    const order = response.data as any;
+                    setQrModal({
+                        orderId: order.id,
+                        orderCode: order.orderCode || `LILI${order.id}`,
+                        total,
+                    });
+                } else {
+                    navigate('/order-success');
+                }
+            } else {
+                alert(response.message || 'Có lỗi xảy ra khi tạo đơn hàng');
+            }
+
+        } catch (error: any) {
+            console.error('Lỗi khi đặt hàng:', error);
+            alert(error.response?.data?.message || 'Có lỗi xảy ra, vui lòng thử lại');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
-    if (checkoutItems.length === 0) {
+    if (checkoutItems.length === 0 && !qrModal) {
         return (
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
                 <p className="text-gray-500 mb-4">Không có sản phẩm nào được chọn để thanh toán.</p>
@@ -353,6 +394,17 @@ export default function Checkout() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* QR Payment Modal */}
+            {qrModal && (
+                <PaymentQRModal
+                    orderId={qrModal.orderId}
+                    orderCode={qrModal.orderCode}
+                    total={qrModal.total}
+                    onConfirmed={() => navigate('/order-success')}
+                    onClose={() => navigate('/orders')}
+                />
             )}
         </div>
     );

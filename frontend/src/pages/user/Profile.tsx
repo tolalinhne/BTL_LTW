@@ -1,6 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { User, Mail, Phone, MapPin, Save, Camera, Plus, Edit, Trash2, Navigation, X, Check } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Save, Camera, Plus, Edit, Trash2, Navigation, X, Check, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { uploadService } from '@/services/admin/upload.service';
+import api from '@/services/api';
 import type { Address } from '@/types/user.types';
 
 const ADDRESSES_KEY = 'lili_user_addresses';
@@ -42,28 +44,49 @@ export default function Profile() {
         setForm({ ...form, [e.target.name]: e.target.value });
     };
 
-    const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+
+    const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        if (file.size > 5 * 1024 * 1024) {
-            alert('Ảnh không được vượt quá 5MB');
+        if (file.size > 10 * 1024 * 1024) {
+            alert('Ảnh không được vượt quá 10MB');
             return;
         }
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            setAvatarPreview(reader.result as string);
-        };
-        reader.readAsDataURL(file);
+        setIsUploadingAvatar(true);
+        try {
+            const result = await uploadService.uploadImage(file, 'avatars');
+            setAvatarPreview(result.url);
+        } catch (err) {
+            console.error('Lỗi upload avatar:', err);
+            alert('Lỗi khi tải ảnh lên. Vui lòng thử lại.');
+        } finally {
+            setIsUploadingAvatar(false);
+        }
     };
 
     const handleSave = async () => {
         setIsSaving(true);
-        await new Promise((r) => setTimeout(r, 800));
-        if (user) {
-            updateUser({ ...user, ...form, avatar: avatarPreview || undefined });
+        try {
+            const payload = {
+                name: form.name,
+                phone: form.phone,
+                avatar: avatarPreview || undefined,
+            };
+            const res = await api.put('/auth/profile', payload);
+            const updated = res.data?.data;
+            if (user && updated) {
+                updateUser({ ...user, ...updated });
+            } else if (user) {
+                updateUser({ ...user, ...form, avatar: avatarPreview || undefined });
+            }
+        } catch (err) {
+            console.error('Lỗi cập nhật profile:', err);
+            alert('Lỗi khi lưu thông tin. Vui lòng thử lại.');
+        } finally {
+            setIsSaving(false);
+            setIsEditing(false);
         }
-        setIsSaving(false);
-        setIsEditing(false);
     };
 
     // Address handlers
@@ -192,7 +215,11 @@ export default function Profile() {
             <div className="flex items-center gap-4 mb-8">
                 <div className="relative group">
                     <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
-                    {avatarPreview ? (
+                    {isUploadingAvatar ? (
+                        <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center">
+                            <Loader2 size={24} className="text-brand-accent animate-spin" />
+                        </div>
+                    ) : avatarPreview ? (
                         <img src={avatarPreview} alt="Avatar" className="w-20 h-20 rounded-full object-cover border-2 border-brand-accent/20" />
                     ) : (
                         <div className="w-20 h-20 rounded-full bg-brand-accent/10 flex items-center justify-center text-brand-accent text-2xl font-bold">

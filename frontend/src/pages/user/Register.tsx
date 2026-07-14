@@ -2,10 +2,13 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { User, Mail, Lock, Phone } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCart } from '@/contexts/CartContext';
+import { authService } from '@/services/auth.service';
 
 export default function Register() {
     const navigate = useNavigate();
     const { login } = useAuth();
+    const { syncCart } = useCart();
     const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '' });
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -29,12 +32,22 @@ export default function Register() {
 
         setIsLoading(true);
         try {
-            await new Promise((r) => setTimeout(r, 1000));
-            const mockUser = { id: '1', email: form.email, name: form.name, phone: form.phone, role: 'customer' as const };
-            login('mock-jwt-token', mockUser);
-            navigate('/');
-        } catch {
-            setError('Có lỗi xảy ra, vui lòng thử lại');
+            const data = await authService.register({
+                name: form.name,
+                email: form.email,
+                password: form.password,
+                phone: form.phone,
+            });
+
+            if (data?.accessToken && data?.user) {
+                login(data.accessToken, data.user, data.refreshToken);
+                await syncCart();
+                navigate('/');
+            } else {
+                 setError('Đăng ký thất bại');
+            }
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Có lỗi xảy ra, vui lòng thử lại');
         } finally {
             setIsLoading(false);
         }

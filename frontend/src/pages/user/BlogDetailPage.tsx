@@ -1,14 +1,27 @@
-import React, { useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Calendar, Clock, ChevronRight, Share2, Facebook, Twitter, LinkIcon, ArrowLeft } from 'lucide-react';
 import { getBlogBySlug, getRelatedPosts } from '@/services/blog.service';
 import RelatedPosts from '@/components/user/blog/RelatedPosts';
+import type { UserBlogPost } from '@/types/user.types';
 
 export default function BlogDetailPage() {
     const { slug } = useParams<{ slug: string }>();
+    const [post, setPost] = useState<UserBlogPost | null>(null);
+    const [related, setRelated] = useState<UserBlogPost[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    const post = useMemo(() => (slug ? getBlogBySlug(slug) : undefined), [slug]);
-    const related = useMemo(() => (slug ? getRelatedPosts(slug) : []), [slug]);
+    useEffect(() => {
+        if (!slug) return;
+        setLoading(true);
+        getBlogBySlug(slug).then((p) => {
+            setPost(p || null);
+            setLoading(false);
+        });
+        getRelatedPosts(slug).then(setRelated);
+    }, [slug]);
+
+    if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><p className="text-gray-400">Đang tải...</p></div>;
 
     if (!post) {
         return (

@@ -5,7 +5,7 @@ export type { User, LoginCredentials, RegisterData, AuthResponse, Order, OrderIt
 
 // ===== User Product (extended) =====
 export interface Product extends BaseProduct {
-    colors: string[];
+    colors?: string[];
     sizes?: string[];
     description?: string;
     detailedDescription?: string;
@@ -17,6 +17,8 @@ export interface Product extends BaseProduct {
     isBestSeller?: boolean;
     isSale?: boolean;
     discount?: number;
+    salePrice?: number;      // Giá sau khi giảm (tính từ discountPercent)
+    discountPercent?: number; // % giảm từ sale
 }
 
 // ===== Cart =====
@@ -42,12 +44,13 @@ export interface Review {
 
 // ===== Chat / AI Assistant =====
 export interface ChatProduct {
-    id: string;
+    id: number;
     name: string;
+    slug: string;
     price: number;
     originalPrice?: number;
-    image: string;
-    category: string;
+    imageUrl: string;
+    categoryName: string;
 }
 
 export interface ChatMessage {

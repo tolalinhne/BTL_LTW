@@ -1,32 +1,55 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { BookOpen } from 'lucide-react';
 import BlogCard, { BlogCardSkeleton } from '@/components/user/blog/BlogCard';
 import BlogSidebar from '@/components/user/blog/BlogSidebar';
 import { getBlogs, getCategories } from '@/services/blog.service';
+import type { UserBlogPost, BlogCategory } from '@/types/user.types';
 
 export default function BlogListPage() {
-    const [search, setSearch] = useState('');
+    const [searchInput, setSearchInput] = useState(''); // giá trị input thực tế
+    const [search, setSearch] = useState('');            // giá trị debounced gửi API
     const [category, setCategory] = useState('');
     const [page, setPage] = useState(1);
     const limit = 6;
 
-    const categories = useMemo(() => getCategories(), []);
-    const { data: posts, total } = useMemo(
-        () => getBlogs({ page, limit, search, category }),
-        [page, search, category]
-    );
+    const [categories, setCategories] = useState<BlogCategory[]>([]);
+    const [posts, setPosts] = useState<UserBlogPost[]>([]);
+    const [total, setTotal] = useState(0);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        getCategories().then(setCategories);
+    }, []);
+
+    // Debounce: chờ 400ms sau khi người dùng ngừng gõ mới gọi API
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setSearch(searchInput);
+            setPage(1);
+        }, 400);
+        return () => clearTimeout(timer);
+    }, [searchInput]);
+
+    useEffect(() => {
+        setLoading(true);
+        getBlogs({ page, limit, search, category }).then(({ data, total: t }) => {
+            setPosts(data);
+            setTotal(t);
+            setLoading(false);
+        });
+    }, [page, search, category]);
 
     const totalPages = Math.ceil(total / limit);
 
-    const handleSearchChange = (q: string) => {
-        setSearch(q);
-        setPage(1);
-    };
+    // Thay đổi search input (debounced sẽ tự kích hoạt)
+    const handleSearchChange = useCallback((q: string) => {
+        setSearchInput(q);
+    }, []);
 
-    const handleCategoryChange = (slug: string) => {
+    const handleCategoryChange = useCallback((slug: string) => {
         setCategory(slug);
         setPage(1);
-    };
+    }, []);
 
     return (
         <div>
@@ -50,7 +73,21 @@ export default function BlogListPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-10">
                     {/* Main */}
                     <div>
-                        {posts.length === 0 ? (
+                        {loading ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            {Array.from({ length: 4 }).map((_, i) => (
+                                <div key={i} className="animate-pulse rounded-2xl overflow-hidden bg-white border border-gray-100">
+                                    <div className="aspect-[16/9] bg-gray-200" />
+                                    <div className="p-5 space-y-3">
+                                        <div className="h-3 bg-gray-200 rounded w-1/3" />
+                                        <div className="h-5 bg-gray-200 rounded w-3/4" />
+                                        <div className="h-3 bg-gray-200 rounded w-full" />
+                                        <div className="h-3 bg-gray-200 rounded w-2/3" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : posts.length === 0 ? (
                             <div className="text-center py-20">
                                 <BookOpen size={48} className="mx-auto text-gray-300 mb-4" />
                                 <h3 className="font-serif text-xl font-bold text-gray-400 mb-2">
@@ -109,7 +146,7 @@ export default function BlogListPage() {
                             <BlogSidebar
                                 categories={categories}
                                 activeCategory={category}
-                                searchQuery={search}
+                                searchQuery={searchInput}
                                 onCategoryChange={handleCategoryChange}
                                 onSearchChange={handleSearchChange}
                             />
@@ -122,7 +159,7 @@ export default function BlogListPage() {
                     <BlogSidebar
                         categories={categories}
                         activeCategory={category}
-                        searchQuery={search}
+                        searchQuery={searchInput}
                         onCategoryChange={handleCategoryChange}
                         onSearchChange={handleSearchChange}
                     />

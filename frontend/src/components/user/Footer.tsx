@@ -1,8 +1,57 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, Phone, Mail, Facebook, Instagram } from 'lucide-react';
+import api from '@/services/api';
+
+interface CategoryItem {
+    id: number;
+    name: string;
+    slug: string;
+    isFeatured?: boolean;
+    is_featured?: boolean;
+}
 
 export default function Footer() {
+    const [footerCategories, setFooterCategories] = useState<{ label: string; to: string }[]>([]);
+
+    useEffect(() => {
+        const fetchCategories = async () => {
+            try {
+                const res = await api.get('/categories');
+                const catData: CategoryItem[] = res.data?.data || [];
+
+                // Lấy các danh mục nổi bật, Signature luôn đứng đầu
+                let cats = Array.isArray(catData) ? [...catData] : [];
+                const sigIdx = cats.findIndex(
+                    (c) => c.slug === 'signature' || c.name?.toLowerCase() === 'signature'
+                );
+                if (sigIdx > 0) {
+                    const [sig] = cats.splice(sigIdx, 1);
+                    cats.unshift(sig);
+                }
+
+                // Lấy tối đa 6 danh mục nổi bật hoặc đầu tiên
+                const featured = cats.filter((c) => c.isFeatured || c.is_featured);
+                const displayed = featured.length > 0 ? featured.slice(0, 6) : cats.slice(0, 6);
+
+                setFooterCategories(
+                    displayed.map((c) => ({ label: c.name, to: `/products/${c.slug}` }))
+                );
+            } catch {
+                // Fallback tĩnh nếu API lỗi
+                setFooterCategories([
+                    { label: 'Signature', to: '/products/signature' },
+                    { label: 'Đầm', to: '/products/dresses' },
+                    { label: 'Áo', to: '/products/tops' },
+                    { label: 'Quần', to: '/products/pants' },
+                    { label: 'Phụ kiện', to: '/products/accessories' },
+                    { label: 'Sale', to: '/products/sale' },
+                ]);
+            }
+        };
+        fetchCategories();
+    }, []);
+
     return (
         <footer className="bg-brand-primary text-white">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -25,24 +74,22 @@ export default function Footer() {
                         </div>
                     </div>
 
-                    {/* Quick Links */}
+                    {/* Danh mục — lấy động từ API, nổi bật */}
                     <div>
                         <h4 className="font-semibold text-sm uppercase tracking-wider mb-4 text-brand-accent">Danh mục</h4>
                         <ul className="space-y-2.5">
-                            {[
-                                { label: 'Đầm', to: '/products/dresses' },
-                                { label: 'Áo', to: '/products/tops' },
-                                { label: 'Quần', to: '/products/pants' },
-                                { label: 'Phụ kiện', to: '/products/accessories' },
-                                { label: 'Sale', to: '/products/sale' },
-                                { label: 'Blog', to: '/blog' },
-                            ].map((item) => (
+                            {footerCategories.map((item) => (
                                 <li key={item.to}>
                                     <Link to={item.to} className="text-sm text-gray-400 hover:text-white transition-colors">
                                         {item.label}
                                     </Link>
                                 </li>
                             ))}
+                            <li>
+                                <Link to="/blog" className="text-sm text-gray-400 hover:text-white transition-colors">
+                                    Blog
+                                </Link>
+                            </li>
                         </ul>
                     </div>
 

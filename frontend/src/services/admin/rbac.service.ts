@@ -1,4 +1,5 @@
 import type { PermissionGroup, RBACRole, StaffUser } from '@/types/admin.types';
+import api from '@/services/api';
 
 // ===== PERMISSIONS =====
 export const PERMISSION_GROUPS: PermissionGroup[] = [
@@ -72,58 +73,54 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     },
 ];
 
-const ALL_PERMISSION_KEYS = PERMISSION_GROUPS.flatMap((g) => g.permissions.map((p) => p.key));
+export const ALL_PERMISSION_KEYS = PERMISSION_GROUPS.flatMap((g) => g.permissions.map((p) => p.key));
 
-// ===== ROLES =====
-export const MOCK_ROLES: RBACRole[] = [
-    {
-        id: 'superadmin',
-        name: 'SuperAdmin',
-        description: 'Toàn quyền hệ thống, không bị giới hạn',
-        permissions: ALL_PERMISSION_KEYS,
-        isSystem: true,
-        color: '#dc2626',
-        createdAt: '01/11/2025',
-    },
-    {
-        id: 'admin',
-        name: 'Admin',
-        description: 'Quản trị viên — quản lý sản phẩm, đơn hàng, người dùng',
-        permissions: ALL_PERMISSION_KEYS.filter((k) => !k.startsWith('settings.')),
-        isSystem: true,
-        color: '#7c3aed',
-        createdAt: '01/11/2025',
-    },
-    {
-        id: 'staff-order',
-        name: 'Nhân viên Đơn hàng',
-        description: 'Xử lý và quản lý đơn hàng',
-        permissions: ['order.view', 'order.update', 'product.view', 'user.view', 'stats.view'],
-        isSystem: false,
-        color: '#2563eb',
-        createdAt: '15/01/2026',
-    },
-    {
-        id: 'staff-content',
-        name: 'Nhân viên Nội dung',
-        description: 'Quản lý blog và sản phẩm',
-        permissions: ['blog.view', 'blog.create', 'blog.edit', 'blog.publish', 'product.view', 'product.create', 'product.update', 'category.view'],
-        isSystem: false,
-        color: '#059669',
-        createdAt: '20/01/2026',
-    },
-];
+// ===== ROLES INTERFACE =====
+export const adminRoleService = {
+     getAll: async (): Promise<RBACRole[]> => {
+         const res = await api.get('/admin/roles');
+         return res.data?.data;
+     },
+     getById: async (id: string): Promise<RBACRole> => {
+          const res = await api.get(`/admin/roles/${id}`);
+          return res.data?.data;
+     },
+     create: async (data: Partial<RBACRole>): Promise<RBACRole> => {
+          const res = await api.post('/admin/roles', data);
+          return res.data?.data;
+     },
+     update: async (id: string, data: Partial<RBACRole>): Promise<RBACRole> => {
+          const res = await api.put(`/admin/roles/${id}`, data);
+          return res.data?.data;
+     },
+     delete: async (id: string): Promise<void> => {
+          await api.delete(`/admin/roles/${id}`);
+     }
+};
 
-// ===== STAFF =====
-export const MOCK_STAFF: StaffUser[] = [
-    { id: '1', name: 'Admin User', email: 'admin@lilifashion.vn', phone: '0900000000', roleId: 'superadmin', status: 'active', createdAt: '01/11/2025' },
-    { id: '2', name: 'Nguyễn Văn Quản', email: 'quan@lilifashion.vn', phone: '0911111111', roleId: 'admin', status: 'active', createdAt: '01/12/2025' },
-    { id: '3', name: 'Trần Thị Hàng', email: 'hang@lilifashion.vn', phone: '0922222222', roleId: 'staff-order', status: 'active', createdAt: '15/01/2026' },
-    { id: '4', name: 'Lê Minh Blog', email: 'blog@lilifashion.vn', phone: '0933333333', roleId: 'staff-content', status: 'active', createdAt: '20/01/2026' },
-    { id: '5', name: 'Phạm Anh Kho', email: 'kho@lilifashion.vn', phone: '0944444444', roleId: 'staff-order', status: 'locked', createdAt: '01/02/2026' },
-];
 
-// ===== Helper =====
-export function getRoleById(id: string): RBACRole | undefined {
-    return MOCK_ROLES.find((r) => r.id === id);
-}
+// ===== STAFF INTERFACE =====
+export const adminStaffService = {
+     getAll: async (params?: Record<string, string | number>) => {
+          const res = await api.get('/admin/staff', { params });
+          return res.data?.data;
+     },
+     getById: async (id: string): Promise<StaffUser> => {
+          const res = await api.get(`/admin/staff/${id}`);
+          return res.data?.data;
+     },
+     create: async (data: Partial<StaffUser>): Promise<StaffUser> => {
+          const res = await api.post('/admin/staff', data);
+          return res.data?.data;
+     },
+     update: async (id: string, data: Partial<StaffUser>): Promise<StaffUser> => {
+          const res = await api.put(`/admin/staff/${id}`, data);
+          return res.data?.data;
+     },
+     updateStatus: async (id: string, status: string): Promise<void> => {
+          await api.put(`/admin/staff/${id}/status`, { status });
+     },
+     delete: async (id: string): Promise<void> => {
+          await api.delete(`/admin/staff/${id}`);
+     }
+};

@@ -1,21 +1,17 @@
-import React, { useState, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { SlidersHorizontal, ChevronDown, ChevronUp, Star, X } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
+import { SlidersHorizontal, ChevronDown, ChevronUp, Star, X, Sparkles, Search } from 'lucide-react';
 import ProductCard from '@/components/user/ProductCard';
-import { getFeaturedCategories, getAllCategories } from '@/services/categoryData';
+import api from '@/services/api';
 import type { Product } from '@/types/user.types';
 
-// Mock data
-const ALL_PRODUCTS: Product[] = [
-    { id: '1', name: 'Lily Floral Dress', sku: 'LFD-DR-001', price: 785000, image: 'https://picsum.photos/seed/dress1/600/800', category: 'Dresses', colors: ['#f8d7da', '#d1ecf1', '#fff3cd'], stock: 45, soldCount: 150, rating: 4.5, createdAt: '2026-02-20', isNew: true },
-    { id: '2', name: 'Pastel Blouse', sku: 'PBL-TP-002', price: 425000, image: 'https://picsum.photos/seed/blouse1/600/800', category: 'Tops', colors: ['#e2e3e5', '#f8d7da'], stock: 120, soldCount: 320, rating: 4.2, createdAt: '2026-01-15', isBestSeller: true },
-    { id: '3', name: 'LiLi Basic Polo', sku: 'LBP-TP-003', price: 249000, originalPrice: 350000, image: 'https://picsum.photos/seed/polo1/600/800', category: 'Tops', colors: ['#f8d7da', '#ffffff', '#007bff'], stock: 80, soldCount: 450, rating: 3.8, createdAt: '2026-01-10', isSale: true, discount: 40 },
-    { id: '4', name: 'Classic Tailored Blazer', sku: 'CTB-SG-004', price: 1250000, image: 'https://picsum.photos/seed/blazer1/600/800', category: 'Signature', colors: ['#000000', '#ffffff'], stock: 30, soldCount: 85, rating: 4.9, createdAt: '2026-02-01' },
-    { id: '5', name: 'Garden Bloom Midi Dress', sku: 'GBM-DR-005', price: 850000, image: 'https://picsum.photos/seed/dress2/600/800', category: 'Dresses', colors: ['#f8d7da'], stock: 18, soldCount: 200, rating: 4.6, createdAt: '2026-02-25', isNew: true },
-    { id: '6', name: 'Signature Tote Bag', sku: 'STB-AC-006', price: 320000, image: 'https://picsum.photos/seed/bag1/600/800', category: 'Accessories', colors: ['#8b4513'], stock: 55, soldCount: 180, rating: 4.0, createdAt: '2026-01-20' },
-    { id: '7', name: 'Elegant Evening Gown', sku: 'EEG-DR-007', price: 1500000, image: 'https://picsum.photos/seed/gown1/600/800', category: 'Dresses', colors: ['#1a1a1a', '#800020'], stock: 12, soldCount: 60, rating: 4.8, createdAt: '2026-02-28', isNew: true },
-    { id: '8', name: 'Casual Cotton Tee', sku: 'CCT-TP-008', price: 195000, image: 'https://picsum.photos/seed/tee1/600/800', category: 'Tops', colors: ['#ffffff', '#f0f0f0', '#d4a574'], stock: 200, soldCount: 520, rating: 3.5, createdAt: '2025-12-15' },
-];
+interface CategoryItem {
+    id: number;
+    name: string;
+    slug: string;
+    description?: string;
+    productCount: number;
+}
 
 const SORT_OPTIONS = [
     { value: 'newest', label: 'Mới nhất' },
@@ -48,6 +44,9 @@ const DATE_OPTIONS = [
 
 export default function ProductList() {
     const { category } = useParams();
+    const [searchParams] = useSearchParams();
+    const searchQuery = searchParams.get('search') || '';
+
     const [sortBy, setSortBy] = useState('newest');
     const [priceRange, setPriceRange] = useState('all');
     const [minRating, setMinRating] = useState(0);
@@ -55,31 +54,119 @@ export default function ProductList() {
     const [sortBySales, setSortBySales] = useState(false);
     const [showAllCategories, setShowAllCategories] = useState(false);
     const [showFilters, setShowFilters] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const ITEMS_PER_PAGE = 12;
 
-    const featuredCategories = getFeaturedCategories();
-    const allCategories = getAllCategories();
-    const displayCategories = showAllCategories ? allCategories : featuredCategories;
+    const [allProducts, setAllProducts] = useState<Product[]>([]);
+    const [signatureAllProducts, setSignatureAllProducts] = useState<Product[]>([]); // full list for client-side pagination
+    const [categories, setCategories] = useState<CategoryItem[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalProducts, setTotalProducts] = useState(0);
+
+    const isSignature = category?.toLowerCase() === 'signature';
+
+    // ── Effect 1: Signature — fetch toàn bộ 1 lần khi vào trang ──────────
+    useEffect(() => {
+        if (!isSignature) return;
+        let cancelled = false;
+        const fetchSignature = async () => {
+            setLoading(true);
+            try {
+                const [prodRes, catRes] = await Promise.all([
+                    api.get('/products/featured', { params: { limit: 200 } }),
+                    api.get('/categories'),
+                ]);
+                if (cancelled) return;
+                const prodData: Product[] = Array.isArray(prodRes.data?.data) ? prodRes.data.data : [];
+                setSignatureAllProducts(prodData);
+                setTotalProducts(prodData.length);
+                setTotalPages(Math.max(1, Math.ceil(prodData.length / ITEMS_PER_PAGE)));
+                setAllProducts(prodData.slice(0, ITEMS_PER_PAGE)); // trang 1
+                setCurrentPage(1);
+                const catData = catRes.data?.data?.data || catRes.data?.data || [];
+                setCategories(Array.isArray(catData) ? catData : []);
+            } catch (e) {
+                console.error('Failed to fetch signature products:', e);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        };
+        fetchSignature();
+        return () => { cancelled = true; };
+    }, [isSignature]); // chỉ chạy khi vào/rời trang Signature
+
+    // ── Effect 2: Signature — đổi trang → slice từ cache, không gọi API ──
+    useEffect(() => {
+        if (!isSignature || signatureAllProducts.length === 0) return;
+        const start = (currentPage - 1) * ITEMS_PER_PAGE;
+        setAllProducts(signatureAllProducts.slice(start, start + ITEMS_PER_PAGE));
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, [currentPage]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // ── Effect 3: Non-Signature — server-side filter + pagination ─────────
+    useEffect(() => {
+        if (isSignature) return;
+        let cancelled = false;
+        const fetchData = async () => {
+            setLoading(true);
+            try {
+                const prodParams: Record<string, any> = {
+                    category,
+                    sort: sortBySales ? 'best_seller' : sortBy,
+                    limit: ITEMS_PER_PAGE,
+                    page: currentPage,
+                };
+                // Đọc search query param từ URL nếu có
+                if (searchQuery) {
+                    prodParams.search = searchQuery;
+                    delete prodParams.category; // khi search thì không filter category
+                }
+                if (priceRange !== 'all') {
+                    const [min, max] = priceRange.split('-').map(Number);
+                    prodParams.minPrice = min;
+                    prodParams.maxPrice = max;
+                }
+                const [prodRes, catRes] = await Promise.all([
+                    api.get('/products', { params: prodParams }),
+                    api.get('/categories'),
+                ]);
+                if (cancelled) return;
+                const pagedData = prodRes.data?.data;
+                const prodData = pagedData?.data || pagedData?.items || pagedData || [];
+                setAllProducts(Array.isArray(prodData) ? prodData : []);
+                setTotalPages(pagedData?.totalPages || 1);
+                setTotalProducts(pagedData?.total || 0);
+                const catData = catRes.data?.data?.data || catRes.data?.data || [];
+                setCategories(Array.isArray(catData) ? catData : []);
+            } catch (e) {
+                console.error('Failed to fetch products:', e);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        };
+        fetchData();
+        return () => { cancelled = true; };
+    }, [category, isSignature, sortBy, sortBySales, currentPage, priceRange, searchQuery]);
+
+    // Reset về trang 1 khi đổi filter (non-Signature)
+    useEffect(() => {
+        if (!isSignature) setCurrentPage(1);
+    }, [category, sortBy, sortBySales, priceRange, isSignature, searchQuery]);
+
+    const featuredCategories = categories.filter((c: any) => c.isFeatured || c.is_featured);
+    const allCategoriesToShow = categories;
+    const displayCategories = showAllCategories ? allCategoriesToShow : (featuredCategories.length > 0 ? featuredCategories : categories.slice(0, 6));
 
     const filteredProducts = useMemo(() => {
-        let products = ALL_PRODUCTS;
+        let products = allProducts;
 
-        // Category filter
-        if (category) {
-            products = products.filter((p) => p.category.toLowerCase() === category.toLowerCase());
-        }
-
-        // Price range filter
-        if (priceRange !== 'all') {
-            const [min, max] = priceRange.split('-').map(Number);
-            products = products.filter((p) => p.price >= min && p.price <= max);
-        }
-
-        // Rating filter
+        // Rating filter (client-side, backend doesn't support it)
         if (minRating > 0) {
             products = products.filter((p) => (p.rating || 0) >= minRating);
         }
 
-        // Date filter
+        // Date filter (client-side)
         if (dateFilter !== 'all') {
             const days = Number(dateFilter);
             const cutoff = new Date();
@@ -87,32 +174,12 @@ export default function ProductList() {
             products = products.filter((p) => p.createdAt && new Date(p.createdAt) >= cutoff);
         }
 
-        // Sort by sales first if enabled
-        if (sortBySales) {
-            return [...products].sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0));
-        }
-
-        // Regular sort
-        switch (sortBy) {
-            case 'price-asc':
-                return [...products].sort((a, b) => a.price - b.price);
-            case 'price-desc':
-                return [...products].sort((a, b) => b.price - a.price);
-            case 'popular':
-                return [...products].sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0));
-            case 'newest':
-                return [...products].sort((a, b) => {
-                    if (!a.createdAt || !b.createdAt) return 0;
-                    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-                });
-            default:
-                return products;
-        }
-    }, [category, sortBy, priceRange, minRating, dateFilter, sortBySales]);
+        return products;
+    }, [allProducts, minRating, dateFilter]);
 
     // Find category name for breadcrumb
     const categoryName = category
-        ? allCategories.find((c) => c.slug.toLowerCase() === category.toLowerCase())?.name || category
+        ? allCategoriesToShow.find((c: CategoryItem) => c.slug.toLowerCase() === category.toLowerCase())?.name || category
         : null;
 
     const activeFiltersCount = [
@@ -135,7 +202,7 @@ export default function ProductList() {
             <section className="py-8 mb-6">
                 <div className="flex items-center justify-between mb-6">
                     <h2 className="text-2xl font-bold">Danh mục sản phẩm</h2>
-                    {allCategories.length > featuredCategories.length && (
+                    {categories.length > featuredCategories.length && (
                         <button
                             onClick={() => setShowAllCategories(!showAllCategories)}
                             className="flex items-center gap-1 text-sm font-medium text-brand-accent hover:underline"
@@ -143,7 +210,7 @@ export default function ProductList() {
                             {showAllCategories ? (
                                 <><ChevronUp size={14} /> Thu gọn</>
                             ) : (
-                                <><ChevronDown size={14} /> Xem tất cả ({allCategories.length})</>
+                                <><ChevronDown size={14} /> Xem tất cả ({categories.length})</>
                             )}
                         </button>
                     )}
@@ -189,8 +256,22 @@ export default function ProductList() {
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold">{categoryName || 'Tất cả sản phẩm'}</h1>
-                    <p className="text-sm text-gray-500 mt-1">{filteredProducts.length} sản phẩm</p>
+                    {isSignature ? (
+                        <div>
+                            <div className="inline-flex items-center gap-2 px-3 py-1 bg-brand-accent/10 text-brand-accent rounded-full text-xs font-semibold mb-2">
+                                <Sparkles size={12} /> BST Độc quyền
+                            </div>
+                            <h1 className="text-2xl sm:text-3xl font-bold">Signature Collection</h1>
+                            <p className="text-sm text-gray-500 mt-1">{totalProducts} sản phẩm nổi bật được tuyển chọn</p>
+                        </div>
+                    ) : (
+                        <div>
+                            <h1 className="text-2xl sm:text-3xl font-bold">
+                                {searchQuery ? `Tìm kiếm: "${searchQuery}"` : (categoryName || 'Tất cả sản phẩm')}
+                            </h1>
+                            <p className="text-sm text-gray-500 mt-1">{totalProducts} sản phẩm</p>
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -215,7 +296,7 @@ export default function ProductList() {
                     <div className="relative">
                         <select
                             value={sortBy}
-                            onChange={(e) => { setSortBy(e.target.value); setSortBySales(false); }}
+                            onChange={(e) => { setSortBy(e.target.value); setSortBySales(false); setCurrentPage(1); }}
                             className="appearance-none pl-3 pr-8 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/30"
                         >
                             {SORT_OPTIONS.map((opt) => (
@@ -226,6 +307,23 @@ export default function ProductList() {
                     </div>
                 </div>
             </div>
+
+            {/* Search result banner */}
+            {searchQuery && (
+                <div className="mb-6 flex items-center gap-3 px-4 py-3 bg-brand-accent/5 border border-brand-accent/20 rounded-xl">
+                    <Search size={16} className="text-brand-accent flex-shrink-0" />
+                    <p className="text-sm text-gray-700">
+                        Kết quả tìm kiếm cho: <strong className="text-brand-primary">"{searchQuery}"</strong>
+                        {totalProducts > 0 && <span className="text-gray-500 ml-1">({totalProducts} sản phẩm)</span>}
+                    </p>
+                    <button
+                        onClick={() => window.history.back()}
+                        className="ml-auto text-xs text-brand-accent hover:underline whitespace-nowrap"
+                    >
+                        ✕ Xóa tìm kiếm
+                    </button>
+                </div>
+            )}
 
             {/* Filters Panel */}
             {showFilters && (
@@ -321,6 +419,50 @@ export default function ProductList() {
                             Xóa bộ lọc
                         </button>
                     )}
+                </div>
+            )}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-10 mb-4">
+                    <button
+                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                        ← Trước
+                    </button>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                        .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 2)
+                        .reduce<(number | string)[]>((acc, p, idx, arr) => {
+                            if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('...');
+                            acc.push(p);
+                            return acc;
+                        }, [])
+                        .map((p, i) =>
+                            typeof p === 'string' ? (
+                                <span key={`ellipsis-${i}`} className="px-2 text-gray-400">…</span>
+                            ) : (
+                                <button
+                                    key={p}
+                                    onClick={() => setCurrentPage(p)}
+                                    className={`w-10 h-10 text-sm rounded-lg font-medium transition-colors ${
+                                        currentPage === p
+                                            ? 'bg-brand-primary text-white shadow-md'
+                                            : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    {p}
+                                </button>
+                            )
+                        )}
+                    <button
+                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                        Sau →
+                    </button>
                 </div>
             )}
         </div>

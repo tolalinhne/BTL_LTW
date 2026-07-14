@@ -1,29 +1,70 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Sparkles, Truck, Shield, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
 import ProductCard from '@/components/user/ProductCard';
-import { getFeaturedCategories, getAllCategories } from '@/services/categoryData';
+import api from '@/services/api';
 import type { Product } from '@/types/user.types';
 
-// Mock data (sẽ thay bằng API sau)
-const FEATURED_PRODUCTS: Product[] = [
-    { id: '1', name: 'Lily Floral Dress', sku: 'LFD-DR-001', price: 785000, image: 'https://picsum.photos/seed/dress1/600/800', category: 'Dresses', colors: ['#f8d7da', '#d1ecf1', '#fff3cd'], stock: 45, isNew: true },
-    { id: '2', name: 'Pastel Blouse', sku: 'PBL-TP-002', price: 425000, image: 'https://picsum.photos/seed/blouse1/600/800', category: 'Tops', colors: ['#e2e3e5', '#f8d7da'], stock: 120, isBestSeller: true },
-    { id: '3', name: 'LiLi Basic Polo', sku: 'LBP-TP-003', price: 249000, originalPrice: 350000, image: 'https://picsum.photos/seed/polo1/600/800', category: 'Tops', colors: ['#f8d7da', '#ffffff', '#007bff'], stock: 80, isSale: true, discount: 40 },
-    { id: '4', name: 'Classic Tailored Blazer', sku: 'CTB-SG-004', price: 1250000, image: 'https://picsum.photos/seed/blazer1/600/800', category: 'Signature', colors: ['#000000', '#ffffff'], stock: 30 },
-    { id: '5', name: 'Garden Bloom Midi Dress', sku: 'GBM-DR-005', price: 850000, image: 'https://picsum.photos/seed/dress2/600/800', category: 'Dresses', colors: ['#f8d7da'], stock: 18 },
-    { id: '6', name: 'Signature Tote Bag', sku: 'STB-AC-006', price: 320000, image: 'https://picsum.photos/seed/bag1/600/800', category: 'Accessories', colors: ['#8b4513'], stock: 55 },
-];
+interface CategoryItem {
+    id: number;
+    name: string;
+    slug: string;
+    description?: string;
+    productCount: number;
+    isFeatured?: boolean;
+    is_featured?: boolean;
+}
 
 export default function Home() {
     const [showAllCategories, setShowAllCategories] = useState(false);
+    const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+    const [categories, setCategories] = useState<CategoryItem[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    const featuredCategories = getFeaturedCategories();
-    const allCategories = getAllCategories();
-    const displayCategories = showAllCategories ? allCategories : featuredCategories;
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const [prodRes, catRes] = await Promise.all([
+                    // Lấy sản phẩm nổi bật (isBestSeller = true)
+                    api.get('/products/featured', { params: { limit: 8 } }),
+                    api.get('/categories'),
+                ]);
 
-    // Grid cols: fit to number of categories shown, max 6 per row
-    const gridCols = Math.min(displayCategories.length, 6);
+                // /api/products/featured trả về List trực tiếp (không phân trang)
+                const prodData = prodRes.data?.data || [];
+                setFeaturedProducts(Array.isArray(prodData) ? prodData : []);
+
+                const catData = catRes.data?.data || [];
+                const cats: CategoryItem[] = Array.isArray(catData) ? catData : [];
+
+                // Đẩy Signature lên đầu danh sách
+                const signatureIdx = cats.findIndex(
+                    (c) => c.slug === 'signature' || c.name?.toLowerCase() === 'signature'
+                );
+                if (signatureIdx > 0) {
+                    const [sig] = cats.splice(signatureIdx, 1);
+                    cats.unshift(sig);
+                }
+
+                setCategories(cats);
+            } catch (e) {
+                console.error('Failed to fetch home data:', e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, []);
+
+    const featuredCategories = categories.filter((c) => c.isFeatured || c.is_featured);
+    // Khi thu gọn: ưu tiên hiển thị các featured category (hoặc 6 cái đầu); Signature luôn đứng đầu
+    const displayCategories = showAllCategories
+        ? categories
+        : featuredCategories.length > 0
+            ? featuredCategories
+            : categories.slice(0, 6);
+
+    const gridCols = Math.min(displayCategories.length || 1, 6);
 
     return (
         <div>
@@ -49,6 +90,7 @@ export default function Home() {
                                 >
                                     Khám phá ngay <ArrowRight size={16} />
                                 </Link>
+                                {/* Nút BST Signature → trang danh mục Signature */}
                                 <Link
                                     to="/products/signature"
                                     className="inline-flex items-center gap-2 px-6 py-3 border-2 border-brand-primary text-brand-primary text-sm font-semibold rounded-full hover:bg-brand-primary hover:text-white transition-colors"
@@ -74,12 +116,12 @@ export default function Home() {
                 </div>
             </section>
 
-            {/* Categories — inline expand/collapse */}
+            {/* Categories — Signature cố định đầu tiên */}
             <section className="py-16 bg-white">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex items-center justify-between mb-10">
                         <h2 className="text-2xl font-bold">Danh mục sản phẩm</h2>
-                        {allCategories.length > featuredCategories.length && (
+                        {categories.length > (featuredCategories.length || 6) && (
                             <button
                                 onClick={() => setShowAllCategories(!showAllCategories)}
                                 className="flex items-center gap-1.5 text-sm font-medium text-brand-accent hover:underline"
@@ -87,25 +129,37 @@ export default function Home() {
                                 {showAllCategories ? (
                                     <><ChevronUp size={14} /> Thu gọn</>
                                 ) : (
-                                    <><ChevronDown size={14} /> Xem tất cả ({allCategories.length})</>
+                                    <><ChevronDown size={14} /> Xem tất cả ({categories.length})</>
                                 )}
                             </button>
                         )}
                     </div>
 
-                    {/* Responsive grid: fills equally — number of cols adapts to count */}
                     <div
                         className="grid gap-4"
                         style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` }}
                     >
-                        {displayCategories.map((cat) => (
+                        {displayCategories.map((cat: CategoryItem) => (
                             <Link
                                 key={cat.slug}
                                 to={`/products/${cat.slug}`}
-                                className="flex flex-col items-center gap-3 p-5 bg-gray-50 rounded-2xl hover:bg-brand-accent/5 hover:shadow-md transition-all group text-center"
+                                className={`flex flex-col items-center gap-3 p-5 rounded-2xl transition-all group text-center
+                                    ${cat.slug === 'signature' || cat.name?.toLowerCase() === 'signature'
+                                        ? 'bg-brand-accent/10 border border-brand-accent/30 hover:bg-brand-accent/20'
+                                        : 'bg-gray-50 hover:bg-brand-accent/5 hover:shadow-md'
+                                    }`}
                             >
-                                <span className="text-sm font-medium text-gray-700 group-hover:text-brand-accent transition-colors">
+                                <span className={`text-sm font-medium transition-colors
+                                    ${cat.slug === 'signature' || cat.name?.toLowerCase() === 'signature'
+                                        ? 'text-brand-accent font-semibold'
+                                        : 'text-gray-700 group-hover:text-brand-accent'
+                                    }`}>
                                     {cat.name}
+                                    {(cat.slug === 'signature' || cat.name?.toLowerCase() === 'signature') && (
+                                        <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] bg-brand-accent text-white px-1.5 py-0.5 rounded-full">
+                                            <Sparkles size={9} /> Nổi bật
+                                        </span>
+                                    )}
                                 </span>
                             </Link>
                         ))}
@@ -113,19 +167,31 @@ export default function Home() {
                 </div>
             </section>
 
-            {/* Featured Products */}
+            {/* Featured Products — isBestSeller = true */}
             <section className="py-16 bg-brand-bg">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex items-center justify-between mb-10">
-                        <h2 className="text-2xl font-bold">Sản phẩm nổi bật</h2>
-                        <Link to="/products" className="text-sm font-medium text-brand-accent hover:underline flex items-center gap-1">
+                        <div>
+                            <h2 className="text-2xl font-bold">Sản phẩm nổi bật</h2>
+                            <p className="text-sm text-gray-500 mt-1">Được admin đánh dấu nổi bật</p>
+                        </div>
+                        <Link to="/products/signature" className="text-sm font-medium text-brand-accent hover:underline flex items-center gap-1">
                             Xem tất cả <ArrowRight size={14} />
                         </Link>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                        {FEATURED_PRODUCTS.map((product) => (
-                            <ProductCard key={product.id} product={product} />
-                        ))}
+                        {loading ? (
+                            <p className="col-span-full text-center text-gray-400 py-12">Đang tải...</p>
+                        ) : featuredProducts.length > 0 ? (
+                            featuredProducts.map((product: Product) => (
+                                <ProductCard key={product.id} product={product} />
+                            ))
+                        ) : (
+                            <div className="col-span-full text-center py-16">
+                                <p className="text-gray-400 mb-2">Chưa có sản phẩm nổi bật</p>
+                                <p className="text-xs text-gray-300">Admin có thể đánh dấu sản phẩm nổi bật trong trang quản lý</p>
+                            </div>
+                        )}
                     </div>
                 </div>
             </section>

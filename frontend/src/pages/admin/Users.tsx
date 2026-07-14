@@ -1,21 +1,56 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Eye, Trash2, Users as UsersIcon } from 'lucide-react';
 import DataTable from '@/components/admin/DataTable';
+import api from '@/services/api';
 
-const INITIAL_CUSTOMERS = [
-    { id: '1', name: 'Nguyễn Thị A', email: 'a@mail.com', phone: '0912345678', orders: 12, totalSpent: 8500000, status: 'active', created: '01/01/2026' },
-    { id: '2', name: 'Trần Văn B', email: 'b@mail.com', phone: '0987654321', orders: 5, totalSpent: 3200000, status: 'active', created: '15/01/2026' },
-    { id: '3', name: 'Lê Thị C', email: 'c@mail.com', phone: '0966123456', orders: 23, totalSpent: 15200000, status: 'active', created: '20/12/2025' },
-    { id: '4', name: 'Phạm Văn D', email: 'd@mail.com', phone: '0944567890', orders: 1, totalSpent: 450000, status: 'locked', created: '10/02/2026' },
-    { id: '5', name: 'Hoàng Thị E', email: 'e@mail.com', phone: '0978901234', orders: 8, totalSpent: 6800000, status: 'active', created: '05/01/2026' },
-];
+interface Customer {
+    id: string;
+    name: string;
+    email: string;
+    phone?: string;
+    role: string;
+    avatar?: string;
+    orders?: number;
+    totalSpent?: number;
+    status: string;
+    created?: string;
+    createdAt?: string;
+}
 
 const formatVND = (n: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
 
 export default function Users() {
-    const [customers, setCustomers] = useState(INITIAL_CUSTOMERS);
+    const [customers, setCustomers] = useState<Customer[]>([]);
+    const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
-    const [viewingCustomer, setViewingCustomer] = useState<typeof INITIAL_CUSTOMERS[0] | null>(null);
+    const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
+
+    useEffect(() => {
+        const fetchUsers = async () => {
+            try {
+                const res = await api.get('/user/admin/users');
+                const data = res.data?.data || [];
+                const mapped = (Array.isArray(data) ? data : []).map((u: any) => ({
+                    id: String(u.id),
+                    name: u.name || '',
+                    email: u.email || '',
+                    phone: u.phone || '',
+                    role: u.role || 'customer',
+                    avatar: u.avatar,
+                    orders: u.orders || 0,
+                    totalSpent: u.totalSpent || 0,
+                    status: u.active === false ? 'locked' : 'active',
+                    created: u.createdAt ? new Date(u.createdAt).toLocaleDateString('vi-VN') : '',
+                }));
+                setCustomers(mapped);
+            } catch (e) {
+                console.error('Failed to fetch users:', e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchUsers();
+    }, []);
 
     const filtered = customers.filter(
         (c) => c.name.toLowerCase().includes(search.toLowerCase()) || c.email.toLowerCase().includes(search.toLowerCase())
@@ -27,19 +62,25 @@ export default function Users() {
         }
     };
 
-    const toggleLock = (id: string) => {
-        setCustomers((prev) =>
-            prev.map((c) =>
-                c.id === id ? { ...c, status: c.status === 'active' ? 'locked' : 'active' } : c
-            )
-        );
+    const toggleLock = async (id: string) => {
+        try {
+            await api.put(`/user/admin/users/${id}/status`);
+            setCustomers((prev) =>
+                prev.map((c) =>
+                    c.id === id ? { ...c, status: c.status === 'active' ? 'locked' : 'active' } : c
+                )
+            );
+        } catch (e) {
+            console.error('Failed to toggle user status:', e);
+            alert('Không thể thay đổi trạng thái. Vui lòng thử lại.');
+        }
     };
 
     const columns = [
         {
             key: 'name',
             label: 'Khách hàng',
-            render: (item: (typeof INITIAL_CUSTOMERS)[0]) => (
+            render: (item: Customer) => (
                 <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary text-sm font-bold">
                         {item.name.charAt(0)}
@@ -61,12 +102,12 @@ export default function Users() {
             key: 'totalSpent',
             label: 'Tổng chi tiêu',
             sortable: true,
-            render: (item: (typeof INITIAL_CUSTOMERS)[0]) => <span className="font-medium">{formatVND(item.totalSpent)}</span>,
+            render: (item: Customer) => <span className="font-medium">{formatVND(item.totalSpent || 0)}</span>,
         },
         {
             key: 'status',
             label: 'Trạng thái',
-            render: (item: (typeof INITIAL_CUSTOMERS)[0]) => (
+            render: (item: Customer) => (
                 <span className={`px-2 py-1 text-xs font-medium rounded-full ${item.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
                     }`}>
                     {item.status === 'active' ? 'Hoạt động' : 'Đã khóa'}
@@ -77,7 +118,7 @@ export default function Users() {
         {
             key: 'actions',
             label: '',
-            render: (item: (typeof INITIAL_CUSTOMERS)[0]) => (
+            render: (item: Customer) => (
                 <div className="flex items-center gap-1">
                     <button onClick={() => setViewingCustomer(item)} className="p-1.5 text-gray-400 hover:text-primary rounded-lg hover:bg-gray-100">
                         <Eye size={16} />
@@ -98,6 +139,8 @@ export default function Users() {
             ),
         },
     ];
+
+    if (loading) return <div className="flex items-center justify-center py-20"><p className="text-gray-400">Đang tải...</p></div>;
 
     return (
         <div>
@@ -146,7 +189,7 @@ export default function Users() {
                             </div>
                             <div className="flex justify-between py-2 border-b border-gray-100">
                                 <span className="text-gray-500">Tổng chi tiêu</span>
-                                <span className="font-semibold text-primary">{formatVND(viewingCustomer.totalSpent)}</span>
+                                <span className="font-semibold text-primary">{formatVND(viewingCustomer.totalSpent || 0)}</span>
                             </div>
                             <div className="flex justify-between py-2 border-b border-gray-100">
                                 <span className="text-gray-500">Trạng thái</span>

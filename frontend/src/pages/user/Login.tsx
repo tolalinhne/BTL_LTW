@@ -2,11 +2,14 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCart } from '@/contexts/CartContext';
+import { authService } from '@/services/auth.service';
 
 export default function Login() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { login } = useAuth();
+    const { login, regularUser } = useAuth();
+    const { syncCart } = useCart();
     const [email, setEmail] = useState('test@lili.vn');
     const [password, setPassword] = useState('123456');
     const [showPassword, setShowPassword] = useState(false);
@@ -15,25 +18,35 @@ export default function Login() {
 
     const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/';
 
+    // If already logged in as regular user, redirect to destination
+    React.useEffect(() => {
+        if (regularUser) {
+            navigate(from, { replace: true });
+        }
+    }, [regularUser, navigate, from]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         setIsLoading(true);
 
         try {
-            // Mock login (replace with authService.login)
-            await new Promise((r) => setTimeout(r, 1000));
-            const mockUser = {
-                id: '1',
-                email,
-                name: 'Nguyễn Văn Test',
-                phone: '0901234567',
-                role: 'customer' as const,
-            };
-            login('mock-jwt-token', mockUser);
-            navigate(from, { replace: true });
-        } catch {
-            setError('Email hoặc mật khẩu không đúng');
+            const data = await authService.login({ email, password });
+            
+            if (data?.accessToken && data?.user) {
+                const userRole = data.user.role?.toLowerCase();
+                if (userRole === 'admin' || userRole === 'staff') {
+                    setError('Tài khoản quản trị không thể đăng nhập ở đây. Vui lòng sử dụng trang đăng nhập quản trị.');
+                    return;
+                }
+                login(data.accessToken, data.user, data.refreshToken);
+                await syncCart();
+                navigate(from, { replace: true });
+            } else {
+                setError('Đăng nhập thất bại');
+            }
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Email hoặc mật khẩu không đúng');
         } finally {
             setIsLoading(false);
         }

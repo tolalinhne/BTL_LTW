@@ -30,7 +30,7 @@ export default function UserRoutes() {
             <Route path="/" element={<Home />} />
             <Route path="/products" element={<ProductList />} />
             <Route path="/products/:category" element={<ProductList />} />
-            <Route path="/product/:id" element={<ProductDetail />} />
+            <Route path="/product/:slug" element={<ProductDetail />} />
             <Route path="/saleoff" element={<SaleOff />} />
             <Route path="/saleoff/:category" element={<SaleOff />} />
             <Route path="/store" element={<StoreList />} />

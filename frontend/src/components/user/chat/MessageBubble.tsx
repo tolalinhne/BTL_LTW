@@ -62,6 +62,7 @@ function parseInline(text: string): React.ReactNode[] {
 
 export default function MessageBubble({ message }: MessageBubbleProps) {
     const isBot = message.role === 'bot';
+    const hasProducts = isBot && message.products && message.products.length > 0;
 
     return (
         <div className={`flex gap-2.5 px-4 py-1.5 ${isBot ? 'justify-start' : 'justify-end'}`}>
@@ -72,7 +73,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
                 </div>
             )}
 
-            <div className={`max-w-[80%] ${isBot ? '' : 'order-first'}`}>
+            <div className={`${hasProducts ? 'max-w-[92%]' : 'max-w-[80%]'} ${isBot ? '' : 'order-first'}`}>
                 {/* Message bubble */}
                 <div
                     className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${isBot
@@ -83,12 +84,18 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
                     {renderSimpleMarkdown(message.content)}
                 </div>
 
-                {/* Product cards */}
-                {isBot && message.products && message.products.length > 0 && (
-                    <div className="mt-2 flex flex-col gap-2">
-                        {message.products.map((product) => (
-                            <ProductCardInChat key={product.id} product={product} />
-                        ))}
+                {/* Product cards - Horizontal scrollable carousel */}
+                {hasProducts && (
+                    <div className="mt-2">
+                        <div className="flex items-center gap-1.5 px-1 mb-1.5">
+                            <span className="text-[10px] font-medium text-brand-accent">✨ Gợi ý cho bạn</span>
+                            <span className="text-[9px] text-gray-400">({message.products!.length} sản phẩm)</span>
+                        </div>
+                        <div className="chat-product-carousel">
+                            {message.products!.map((product) => (
+                                <ProductCardInChat key={product.id} product={product} />
+                            ))}
+                        </div>
                     </div>
                 )}
 

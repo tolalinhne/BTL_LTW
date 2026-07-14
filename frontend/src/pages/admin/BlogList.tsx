@@ -1,17 +1,35 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, Pencil, Trash2, Eye } from 'lucide-react';
-import { getBlogs, deleteBlog } from '@/services/admin/blog.service';
-import type { BlogPost } from '@/types/admin.types';
+import { Plus, Search, Pencil, Trash2 } from 'lucide-react';
+import { adminBlogService } from '@/services/admin/blog.service';
+import type { AdminBlogPost } from '@/types/admin.types';
 
 export default function BlogList() {
-    const [refresh, setRefresh] = useState(0);
+    const [blogs, setBlogs] = useState<AdminBlogPost[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState<'' | 'draft' | 'published'>('');
     const [deleteId, setDeleteId] = useState<string | null>(null);
     const [toast, setToast] = useState('');
 
-    const blogs = useMemo(() => getBlogs(), [refresh]);
+    useEffect(() => {
+        fetchBlogs();
+    }, []);
+
+    const fetchBlogs = async () => {
+        setIsLoading(true);
+        try {
+            const data = await adminBlogService.getAll();
+            if (Array.isArray(data)) {
+                setBlogs(data);
+            }
+        } catch (error) {
+            console.error("Lỗi khi tải danh sách blog:", error);
+            showToast('Lỗi khi tải danh sách bài viết');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const filtered = useMemo(() => {
         let list = blogs;
@@ -25,12 +43,17 @@ export default function BlogList() {
         return list;
     }, [blogs, search, statusFilter]);
 
-    const handleDelete = () => {
+    const handleDelete = async () => {
         if (deleteId) {
-            deleteBlog(deleteId);
-            setDeleteId(null);
-            setRefresh((r) => r + 1);
-            showToast('Đã xóa bài viết thành công');
+            try {
+                await adminBlogService.delete(deleteId);
+                setDeleteId(null);
+                await fetchBlogs();
+                showToast('Đã xóa bài viết thành công');
+            } catch (error) {
+                console.error("Lỗi khi xóa blog:", error);
+                showToast('Lỗi khi xóa bài viết');
+            }
         }
     };
 
@@ -54,7 +77,7 @@ export default function BlogList() {
                 </div>
                 <Link
                     to="/admin/blog/create"
-                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white text-sm font-medium rounded-xl hover:bg-primary-dark shadow-md shadow-primary/20 transition-all"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-primary text-white text-sm font-medium rounded-xl hover:bg-brand-primary/90 shadow-md shadow-brand-primary/20 transition-all"
                 >
                     <Plus size={18} /> Tạo bài viết
                 </Link>
@@ -69,13 +92,13 @@ export default function BlogList() {
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Tìm kiếm bài viết..."
-                        className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                        className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/30 focus:border-brand-primary transition-all"
                     />
                 </div>
                 <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value as '' | 'draft' | 'published')}
-                    className="px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                    className="px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/30 focus:border-brand-primary transition-all"
                 >
                     <option value="">Tất cả trạng thái</option>
                     <option value="published">Published</option>
@@ -98,7 +121,13 @@ export default function BlogList() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                            {filtered.length === 0 ? (
+                            {isLoading ? (
+                                <tr>
+                                    <td colSpan={6} className="text-center py-16 text-gray-400 text-sm">
+                                        Đang tải dữ liệu...
+                                    </td>
+                                </tr>
+                            ) : filtered.length === 0 ? (
                                 <tr>
                                     <td colSpan={6} className="text-center py-16 text-gray-400 text-sm">
                                         Không có bài viết nào.
@@ -110,7 +139,7 @@ export default function BlogList() {
                                         <td className="px-5 py-4">
                                             <div className="flex items-center gap-3">
                                                 <img
-                                                    src={blog.thumbnail}
+                                                    src={blog.thumbnail || 'https://placehold.co/800x500'}
                                                     alt={blog.title}
                                                     className="w-12 h-9 rounded-lg object-cover flex-shrink-0"
                                                 />
@@ -121,7 +150,7 @@ export default function BlogList() {
                                             </div>
                                         </td>
                                         <td className="px-5 py-4">
-                                            <span className="inline-block px-2.5 py-1 bg-accent-soft text-primary text-xs font-medium rounded-lg">
+                                            <span className="inline-block px-2.5 py-1 bg-brand-accent/10 text-brand-primary text-xs font-medium rounded-lg">
                                                 {blog.category}
                                             </span>
                                         </td>
@@ -135,13 +164,13 @@ export default function BlogList() {
                                                 {blog.status === 'published' ? 'Published' : 'Draft'}
                                             </span>
                                         </td>
-                                        <td className="px-5 py-4 text-sm text-gray-600">{blog.author}</td>
+                                        <td className="px-5 py-4 text-sm text-gray-600">{blog.author || 'Admin'}</td>
                                         <td className="px-5 py-4 text-sm text-gray-500">{formatDate(blog.createdAt)}</td>
                                         <td className="px-5 py-4">
                                             <div className="flex items-center justify-end gap-1">
                                                 <Link
                                                     to={`/admin/blog/${blog.id}/edit`}
-                                                    className="p-2 text-gray-400 hover:text-primary hover:bg-accent-soft rounded-lg transition-all"
+                                                    className="p-2 text-gray-400 hover:text-brand-primary hover:bg-brand-accent/10 rounded-lg transition-all"
                                                     title="Sửa"
                                                 >
                                                     <Pencil size={16} />

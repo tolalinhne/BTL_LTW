@@ -16,6 +16,7 @@ import BlogForm from '@/pages/admin/BlogForm';
 import Roles from '@/pages/admin/Roles';
 import RoleForm from '@/pages/admin/RoleForm';
 import Staff from '@/pages/admin/Staff';
+import AdminSaleOff from '@/pages/admin/SaleOff';
 
 export default function AdminRoutes() {
     return (
@@ -49,6 +50,7 @@ export default function AdminRoutes() {
                 <Route path="roles/create" element={<AdminRoute allowedRoles={['admin']}><RoleForm /></AdminRoute>} />
                 <Route path="roles/:id/edit" element={<AdminRoute allowedRoles={['admin']}><RoleForm /></AdminRoute>} />
                 <Route path="staff" element={<AdminRoute allowedRoles={['admin']}><Staff /></AdminRoute>} />
+                <Route path="saleoff" element={<AdminRoute allowedRoles={['admin']}><AdminSaleOff /></AdminRoute>} />
             </Route>
         </Route>
     );

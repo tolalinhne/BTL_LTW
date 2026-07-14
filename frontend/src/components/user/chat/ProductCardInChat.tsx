@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ExternalLink } from 'lucide-react';
+import { ShoppingBag } from 'lucide-react';
 import { formatPrice } from '@/utils/formatPrice';
 import type { ChatProduct } from '@/types/user.types';
 
@@ -11,37 +11,51 @@ interface ProductCardInChatProps {
 export default function ProductCardInChat({ product }: ProductCardInChatProps) {
     return (
         <Link
-            to={`/product/${product.id}`}
-            className="flex gap-3 p-2.5 rounded-xl bg-gray-50 border border-gray-100 hover:border-brand-accent/30 hover:shadow-sm transition-all group"
+            to={`/product/${product.slug}`}
+            className="chat-product-card group"
         >
-            <div className="w-16 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-gray-200">
+            {/* Product Image */}
+            <div className="chat-product-card__image">
                 <img
-                    src={product.image}
+                    src={product.imageUrl}
                     alt={product.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    loading="lazy"
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                 />
+                {/* Hover overlay */}
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center">
+                    <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white/90 backdrop-blur-sm text-brand-primary text-[10px] font-medium px-2.5 py-1 rounded-full flex items-center gap-1">
+                        <ShoppingBag size={10} />
+                        Xem chi tiết
+                    </span>
+                </div>
+                {/* Sale badge */}
+                {product.originalPrice && product.originalPrice > product.price && (
+                    <span className="absolute top-1.5 left-1.5 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md shadow-sm">
+                        -{Math.round((1 - product.price / product.originalPrice) * 100)}%
+                    </span>
+                )}
             </div>
-            <div className="flex flex-col justify-center min-w-0 flex-1">
-                <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-0.5">
-                    {product.category}
-                </p>
-                <p className="text-sm font-medium text-brand-primary line-clamp-1 group-hover:text-brand-accent transition-colors">
+
+            {/* Product Info */}
+            <div className="chat-product-card__info">
+                {product.categoryName && (
+                    <p className="text-[9px] uppercase tracking-wider text-gray-400 mb-0.5 truncate">
+                        {product.categoryName}
+                    </p>
+                )}
+                <p className="text-[11px] font-medium text-brand-primary line-clamp-2 leading-tight group-hover:text-brand-accent transition-colors min-h-[28px]">
                     {product.name}
                 </p>
-                <div className="flex items-center gap-2 mt-1">
-                    <span className="text-sm font-semibold text-brand-accent">
+                <div className="flex items-center gap-1.5 mt-auto pt-1">
+                    <span className="text-[12px] font-bold text-brand-accent">
                         {formatPrice(product.price)}
                     </span>
-                    {product.originalPrice && (
-                        <span className="text-[10px] text-gray-400 line-through">
+                    {product.originalPrice && product.originalPrice > product.price && (
+                        <span className="text-[9px] text-gray-400 line-through">
                             {formatPrice(product.originalPrice)}
                         </span>
                     )}
                 </div>
-            </div>
-            <div className="flex items-center flex-shrink-0">
-                <ExternalLink size={14} className="text-gray-300 group-hover:text-brand-accent transition-colors" />
             </div>
         </Link>
     );

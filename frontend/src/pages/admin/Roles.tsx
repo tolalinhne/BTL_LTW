@@ -1,37 +1,67 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Edit, Trash2, Copy, Shield, Eye } from 'lucide-react';
 import DataTable from '@/components/admin/DataTable';
 import RoleBadge from '@/components/admin/rbac/rbac/components/RoleBadge';
 import PermissionMatrix from '@/components/admin/rbac/rbac/components/PermissionMatrix';
-import { MOCK_ROLES, PERMISSION_GROUPS } from '@/services/admin/rbac.service';
+import { adminRoleService, PERMISSION_GROUPS } from '@/services/admin/rbac.service';
 import type { RBACRole } from '@/types/admin.types';
 
 export default function Roles() {
     const navigate = useNavigate();
-    const [roles, setRoles] = useState(MOCK_ROLES);
+    const [roles, setRoles] = useState<RBACRole[]>([]);
     const [search, setSearch] = useState('');
     const [showMatrix, setShowMatrix] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
+
+    useEffect(() => {
+        fetchRoles();
+    }, []);
+
+    const fetchRoles = async () => {
+         setIsLoading(true);
+         try {
+             const res = await adminRoleService.getAll();
+             if(res.success && res.data) {
+                  setRoles(res.data);
+             }
+         } catch(error) {
+              console.error("Lỗi khi tải vai trò", error);
+         } finally {
+              setIsLoading(false);
+         }
+    };
 
     const filtered = roles.filter(
         (r) => r.name.toLowerCase().includes(search.toLowerCase()) || r.description.toLowerCase().includes(search.toLowerCase())
     );
 
-    const handleDelete = (id: string) => {
-        setRoles((prev) => prev.filter((r) => r.id !== id));
-        setDeleteConfirm(null);
+    const handleDelete = async (id: string) => {
+         try {
+             await adminRoleService.delete(id);
+             await fetchRoles();
+         } catch(error) {
+              console.error("Lỗi xóa vai trò", error);
+         } finally {
+             setDeleteConfirm(null);
+         }
     };
 
-    const handleClone = (role: RBACRole) => {
-        const cloned: RBACRole = {
-            ...role,
-            id: `clone-${Date.now()}`,
-            name: `${role.name} (Copy)`,
-            isSystem: false,
-            createdAt: new Date().toLocaleDateString('vi-VN'),
-        };
-        setRoles((prev) => [...prev, cloned]);
+    const handleClone = async (role: RBACRole) => {
+        try {
+            const clonedData = {
+                name: `${role.name} (Copy)`,
+                description: `Bản sao của ${role.name}`,
+                permissions: role.permissions,
+                color: role.color,
+                isSystem: false,
+            };
+            await adminRoleService.create(clonedData);
+            await fetchRoles();
+        } catch(error) {
+             console.error("Lỗi nhân bản vai trò", error);
+        }
     };
 
     const columns = [
@@ -63,7 +93,7 @@ export default function Roles() {
             label: 'Quyền hạn',
             sortable: true,
             render: (item: RBACRole) => (
-                <span className="px-2 py-1 bg-primary/10 text-primary text-xs font-medium rounded-full">
+                <span className="px-2 py-1 bg-brand-primary/10 text-brand-primary text-xs font-medium rounded-full">
                     {item.permissions.length} quyền
                 </span>
             ),
@@ -74,7 +104,7 @@ export default function Roles() {
             label: '',
             render: (item: RBACRole) => (
                 <div className="flex items-center gap-1">
-                    <button onClick={() => navigate(`/roles/${item.id}/edit`)} className="p-1.5 text-gray-400 hover:text-primary rounded-lg hover:bg-gray-100" title="Sửa">
+                    <button onClick={() => navigate(`/admin/roles/${item.id}/edit`)} className="p-1.5 text-gray-400 hover:text-brand-primary rounded-lg hover:bg-gray-100" title="Sửa">
                         <Edit size={16} />
                     </button>
                     <button onClick={() => handleClone(item)} className="p-1.5 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50" title="Nhân bản">
@@ -100,14 +130,14 @@ export default function Roles() {
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => setShowMatrix(!showMatrix)}
-                        className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border transition-colors ${showMatrix ? 'bg-primary text-white border-primary' : 'text-gray-600 border-gray-200 hover:bg-gray-50'
+                        className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border transition-colors ${showMatrix ? 'bg-brand-primary text-white border-brand-primary' : 'text-gray-600 border-gray-200 hover:bg-gray-50'
                             }`}
                     >
                         <Eye size={16} /> Ma trận quyền
                     </button>
                     <button
                         onClick={() => navigate('/admin/roles/create')}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-dark transition-colors shadow-md shadow-primary/20"
+                        className="flex items-center gap-2 px-4 py-2.5 bg-brand-primary text-white text-sm font-medium rounded-lg hover:bg-brand-primary/90 transition-colors shadow-md shadow-brand-primary/20"
                     >
                         <Plus size={16} /> Tạo vai trò
                     </button>
@@ -128,18 +158,25 @@ export default function Roles() {
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Tìm vai trò..."
-                    className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/30"
                 />
             </div>
 
             <DataTable columns={columns as any} data={filtered as any} />
 
             {/* Empty state */}
-            {filtered.length === 0 && (
+            {filtered.length === 0 && !isLoading && (
                 <div className="text-center py-12 text-gray-400">
                     <Shield size={40} className="mx-auto mb-3 opacity-30" />
                     <p className="text-sm">Không tìm thấy vai trò nào</p>
                 </div>
+            )}
+            
+            {/* Loading state */}
+            {isLoading && (
+                 <div className="text-center py-12 text-gray-400">
+                     <p className="text-sm">Đang tải dữ liệu...</p>
+                 </div>
             )}
 
             {/* Delete confirmation */}

@@ -1,24 +1,51 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save, AlertTriangle } from 'lucide-react';
 import PermissionTree from '@/components/admin/rbac/rbac/components/PermissionTree';
-import { MOCK_ROLES, PERMISSION_GROUPS } from '@/services/admin/rbac.service';
+import { adminRoleService, PERMISSION_GROUPS } from '@/services/admin/rbac.service';
+import type { RBACRole } from '@/types/admin.types';
 
 export default function RoleForm() {
     const { id } = useParams();
     const navigate = useNavigate();
     const isNew = !id;
 
-    const existingRole = id ? MOCK_ROLES.find((r) => r.id === id) : null;
-
-    const [name, setName] = useState(existingRole?.name || '');
-    const [description, setDescription] = useState(existingRole?.description || '');
-    const [color, setColor] = useState(existingRole?.color || '#6b7280');
-    const [selectedPermissions, setSelectedPermissions] = useState<string[]>(existingRole?.permissions || []);
+    const [existingRole, setExistingRole] = useState<RBACRole | null>(null);
+    const [name, setName] = useState('');
+    const [description, setDescription] = useState('');
+    const [color, setColor] = useState('#6b7280');
+    const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
+    
+    const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     const isSystem = existingRole?.isSystem || false;
+
+    useEffect(() => {
+        if (!isNew && id) {
+            fetchRole(id);
+        }
+    }, [id, isNew]);
+
+    const fetchRole = async (roleId: string) => {
+        setIsLoading(true);
+        try {
+            const res = await adminRoleService.getById(roleId);
+            if(res.success && res.data) {
+                const role = res.data;
+                setExistingRole(role);
+                setName(role.name);
+                setDescription(role.description || '');
+                setColor(role.color || '#6b7280');
+                setSelectedPermissions(role.permissions);
+            }
+        } catch(error) {
+             console.error("Lỗi khi tải vai trò", error);
+        } finally {
+             setIsLoading(false);
+        }
+    };
 
     const validate = () => {
         const errs: Record<string, string> = {};
@@ -33,20 +60,41 @@ export default function RoleForm() {
         e.preventDefault();
         if (!validate()) return;
         setIsSaving(true);
-        await new Promise((r) => setTimeout(r, 1000));
-        navigate('/admin/roles');
+        try {
+             const payload = {
+                  name,
+                  description,
+                  color,
+                  permissions: selectedPermissions,
+             };
+             if (isNew) {
+                  await adminRoleService.create(payload);
+             } else if (id) {
+                  await adminRoleService.update(id, payload);
+             }
+             navigate('/admin/roles');
+        } catch(error) {
+             console.error("Lỗi khi lưu vai trò", error);
+             alert("Lỗi khi lưu vai trò");
+        } finally {
+             setIsSaving(false);
+        }
     };
 
     const PRESET_COLORS = ['#dc2626', '#7c3aed', '#2563eb', '#059669', '#d97706', '#ec4899', '#6b7280'];
 
+    if (isLoading) {
+        return <div className="p-8 text-center text-gray-500">Đang tải dữ liệu...</div>;
+    }
+
     return (
         <div className="max-w-4xl mx-auto">
-            <button onClick={() => navigate('/admin/roles')} className="flex items-center gap-2 text-sm text-gray-500 hover:text-primary mb-4 transition-colors">
+            <button onClick={() => navigate('/admin/roles')} className="flex items-center gap-2 text-sm text-gray-500 hover:text-brand-primary mb-4 transition-colors">
                 <ArrowLeft size={16} /> Quay lại
             </button>
 
             <h1 className="text-2xl font-bold text-gray-900 mb-6">
-                {isNew ? 'Tạo vai trò mới' : `Chỉnh sửa: ${existingRole?.name}`}
+                {isNew ? 'Tạo vai trò mới' : `Chỉnh sửa: ${existingRole?.name || ''}`}
             </h1>
 
             {/* System role warning */}
@@ -73,7 +121,7 @@ export default function RoleForm() {
                                 <input
                                     value={name}
                                     onChange={(e) => { setName(e.target.value); setErrors((p) => ({ ...p, name: '' })); }}
-                                    className={`w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 ${errors.name ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                                    className={`w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/30 ${errors.name ? 'border-red-300 bg-red-50' : 'border-gray-200'
                                         }`}
                                     placeholder="Ví dụ: Nhân viên Kho"
                                 />
@@ -85,7 +133,7 @@ export default function RoleForm() {
                                     value={description}
                                     onChange={(e) => { setDescription(e.target.value); setErrors((p) => ({ ...p, description: '' })); }}
                                     rows={3}
-                                    className={`w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none ${errors.description ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                                    className={`w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/30 resize-none ${errors.description ? 'border-red-300 bg-red-50' : 'border-gray-200'
                                         }`}
                                     placeholder="Mô tả vai trò..."
                                 />
@@ -113,7 +161,7 @@ export default function RoleForm() {
                             <button
                                 type="submit"
                                 disabled={isSaving}
-                                className="w-full flex items-center justify-center gap-2 py-3 bg-primary text-white font-medium rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50 shadow-md shadow-primary/20"
+                                className="w-full flex items-center justify-center gap-2 py-3 bg-brand-primary text-white font-medium rounded-lg hover:bg-brand-primary/90 transition-colors disabled:opacity-50 shadow-md shadow-brand-primary/20"
                             >
                                 <Save size={16} /> {isSaving ? 'Đang lưu...' : 'Lưu vai trò'}
                             </button>

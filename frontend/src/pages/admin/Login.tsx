@@ -2,16 +2,23 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, Sparkles } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Role } from '@/types/admin.types';
+import { authService } from '@/services/auth.service';
 
 export default function Login() {
     const navigate = useNavigate();
-    const { login } = useAuth();
+    const { login, logout, adminUser } = useAuth();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+
+    // If already logged in as admin/staff, redirect to dashboard
+    React.useEffect(() => {
+        if (adminUser) {
+            navigate('/admin/dashboard', { replace: true });
+        }
+    }, [adminUser, navigate]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -19,19 +26,20 @@ export default function Login() {
         setIsLoading(true);
 
         try {
-            // Mock login — determine role from email
-            await new Promise((r) => setTimeout(r, 800));
-            const role: Role = email.includes('admin') ? 'admin' : 'staff';
-            const mockUser = {
-                id: '1',
-                email,
-                name: role === 'admin' ? 'Admin User' : 'Staff User',
-                role,
-            };
-            login('mock-jwt-token', mockUser);
-            navigate('/admin/dashboard', { replace: true });
-        } catch {
-            setError('Email hoặc mật khẩu không đúng');
+            const data = await authService.login({ email, password });
+            if (data?.accessToken && data?.user) {
+                const userRole = data.user.role?.toLowerCase();
+                if (userRole !== 'admin' && userRole !== 'staff') {
+                    setError('Tài khoản này không có quyền truy cập trang quản trị.');
+                    return;
+                }
+                login(data.accessToken, data.user, data.refreshToken);
+                navigate('/admin/dashboard', { replace: true });
+            } else {
+                setError('Đăng nhập thất bại');
+            }
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Email hoặc mật khẩu không đúng');
         } finally {
             setIsLoading(false);
         }

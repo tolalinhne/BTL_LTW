@@ -1,30 +1,64 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Edit, Lock, Unlock, Trash2, UserCog } from 'lucide-react';
 import DataTable from '@/components/admin/DataTable';
 import FormModal from '@/components/admin/FormModal';
 import RoleBadge from '@/components/admin/rbac/rbac/components/RoleBadge';
-import { MOCK_STAFF, MOCK_ROLES, getRoleById } from '@/services/admin/rbac.service';
+import { adminStaffService, adminRoleService } from '@/services/admin/rbac.service';
 import type { StaffUser, RBACRole } from '@/types/admin.types';
 
 export default function Staff() {
     const navigate = useNavigate();
-    const [staff, setStaff] = useState(MOCK_STAFF);
+    const [staff, setStaff] = useState<StaffUser[]>([]);
+    const [roles, setRoles] = useState<RBACRole[]>([]);
     const [search, setSearch] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingStaff, setEditingStaff] = useState<StaffUser | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
 
     // Form
     const [formName, setFormName] = useState('');
     const [formEmail, setFormEmail] = useState('');
     const [formPhone, setFormPhone] = useState('');
     const [formPassword, setFormPassword] = useState('');
-    const [formRoleId, setFormRoleId] = useState(MOCK_ROLES[2]?.id || '');
+    const [formRoleId, setFormRoleId] = useState('');
     const [formStatus, setFormStatus] = useState<'active' | 'locked'>('active');
     const [hoveredRole, setHoveredRole] = useState<RBACRole | null>(null);
 
+    useEffect(() => {
+         fetchData();
+    }, []);
+
+    const fetchData = async () => {
+         setIsLoading(true);
+         try {
+             // In a real app we'd handle pagination, keeping it simple for now
+             const [staffRes, rolesRes] = await Promise.all([
+                 adminStaffService.getAll({ size: 100 }),
+                 adminRoleService.getAll()
+             ]);
+             
+             if(staffRes.success && staffRes.data) {
+                 setStaff(staffRes.data.data);
+             }
+             if(rolesRes.success && rolesRes.data) {
+                 setRoles(rolesRes.data);
+                 if(rolesRes.data.length > 0) {
+                     setFormRoleId(rolesRes.data[0].id);
+                 }
+             }
+
+         } catch (error) {
+             console.error("Lỗi khi tải dữ liệu:", error);
+         } finally {
+             setIsLoading(false);
+         }
+    };
+
+    const getRoleById = (id: string) => roles.find(r => r.id === id);
+
     const filtered = staff.filter(
-        (s) => s.name.toLowerCase().includes(search.toLowerCase()) || s.email.toLowerCase().includes(search.toLowerCase())
+        (s) => s.name?.toLowerCase().includes(search.toLowerCase()) || s.email?.toLowerCase().includes(search.toLowerCase())
     );
 
     const openCreate = () => {
@@ -33,7 +67,7 @@ export default function Staff() {
         setFormEmail('');
         setFormPhone('');
         setFormPassword('');
-        setFormRoleId(MOCK_ROLES[2]?.id || '');
+        setFormRoleId(roles[0]?.id || '');
         setFormStatus('active');
         setIsModalOpen(true);
     };
@@ -42,51 +76,59 @@ export default function Staff() {
         setEditingStaff(s);
         setFormName(s.name);
         setFormEmail(s.email);
-        setFormPhone(s.phone);
+        setFormPhone(s.phone || '');
         setFormPassword('');
         setFormRoleId(s.roleId);
         setFormStatus(s.status);
         setIsModalOpen(true);
     };
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         if (!formName.trim() || !formEmail.trim()) return;
-        if (editingStaff) {
-            setStaff((prev) =>
-                prev.map((s) =>
-                    s.id === editingStaff.id
-                        ? { ...s, name: formName, email: formEmail, phone: formPhone, roleId: formRoleId, status: formStatus }
-                        : s
-                )
-            );
-        } else {
-            setStaff((prev) => [
-                ...prev,
-                {
-                    id: String(Date.now()),
-                    name: formName,
-                    email: formEmail,
-                    phone: formPhone,
-                    roleId: formRoleId,
-                    status: formStatus,
-                    createdAt: new Date().toLocaleDateString('vi-VN'),
-                },
-            ]);
+        setIsLoading(true);
+        try {
+            const payload = {
+                name: formName,
+                email: formEmail,
+                phone: formPhone,
+                roleId: formRoleId,
+                status: formStatus,
+                ...(formPassword ? { password: formPassword } : {})
+            };
+
+            if (editingStaff) {
+                await adminStaffService.update(editingStaff.id, payload);
+            } else {
+                await adminStaffService.create(payload);
+            }
+            await fetchData();
+            setIsModalOpen(false);
+        } catch (error) {
+             console.error("Lỗi khi lưu nhân viên", error);
+             alert("Lỗi khi lưu nhân viên");
+        } finally {
+             setIsLoading(false);
         }
-        setIsModalOpen(false);
     };
 
-    const toggleLock = (id: string) => {
-        setStaff((prev) =>
-            prev.map((s) =>
-                s.id === id ? { ...s, status: s.status === 'active' ? 'locked' : 'active' } : s
-            )
-        );
+    const toggleLock = async (id: string, currentStatus: string) => {
+        try {
+             const newStatus = currentStatus === 'active' ? 'locked' : 'active';
+             await adminStaffService.updateStatus(id, newStatus);
+             await fetchData();
+        } catch (error) {
+             console.error("Lỗi khóa/mở khóa", error);
+        }
     };
 
-    const handleDelete = (id: string) => {
+    const handleDelete = async (id: string) => {
         if (confirm('Bạn có chắc muốn xóa nhân viên này?')) {
-            setStaff((prev) => prev.filter((s) => s.id !== id));
+            try {
+                await adminStaffService.delete(id);
+                await fetchData();
+            } catch (error) {
+                console.error("Lỗi khi xóa", error);
+            }
         }
     };
 
@@ -97,7 +139,7 @@ export default function Staff() {
             render: (item: StaffUser) => (
                 <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary text-sm font-bold">
-                        {item.name.charAt(0)}
+                        {item.name?.charAt(0) || '?'}
                     </div>
                     <div>
                         <p className="font-medium text-gray-900">{item.name}</p>
@@ -135,7 +177,7 @@ export default function Staff() {
                         <Edit size={16} />
                     </button>
                     <button
-                        onClick={() => toggleLock(item.id)}
+                        onClick={() => toggleLock(item.id, item.status)}
                         className={`p-1.5 rounded-lg ${item.status === 'active'
                             ? 'text-gray-400 hover:text-amber-600 hover:bg-amber-50'
                             : 'text-gray-400 hover:text-green-600 hover:bg-green-50'
@@ -161,7 +203,7 @@ export default function Staff() {
                 </div>
                 <button
                     onClick={openCreate}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-dark transition-colors shadow-md shadow-primary/20"
+                    className="flex items-center gap-2 px-4 py-2.5 bg-brand-primary text-white text-sm font-medium rounded-lg hover:bg-brand-primary/90 transition-colors shadow-md shadow-brand-primary/20"
                 >
                     <Plus size={16} /> Thêm nhân viên
                 </button>
@@ -173,19 +215,24 @@ export default function Staff() {
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Tìm theo tên, email..."
-                    className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/30"
                 />
             </div>
 
             <DataTable columns={columns as any} data={filtered as any} />
 
             {/* Empty */}
-            {filtered.length === 0 && (
+            {filtered.length === 0 && !isLoading && (
                 <div className="text-center py-12 text-gray-400">
                     <UserCog size={40} className="mx-auto mb-3 opacity-30" />
                     <p className="text-sm">Không tìm thấy nhân viên nào</p>
                 </div>
             )}
+             {isLoading && (
+                 <div className="text-center py-12 text-gray-400">
+                     <p className="text-sm">Đang tải dữ liệu...</p>
+                 </div>
+             )}
 
             {/* Create / Edit Modal */}
             <FormModal
@@ -199,19 +246,19 @@ export default function Staff() {
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Họ tên *</label>
                         <input value={formName} onChange={(e) => setFormName(e.target.value)}
-                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/30"
                             placeholder="Nhập họ tên..." />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
                         <input type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)}
-                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/30"
                             placeholder="email@lilifashion.vn" />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Số điện thoại</label>
                         <input type="tel" value={formPhone} onChange={(e) => setFormPhone(e.target.value)}
-                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/30"
                             placeholder="0900000000" />
                     </div>
                     <div>
@@ -219,7 +266,7 @@ export default function Staff() {
                             {editingStaff ? 'Đổi mật khẩu' : 'Mật khẩu *'}
                         </label>
                         <input type="password" value={formPassword} onChange={(e) => setFormPassword(e.target.value)}
-                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/30"
                             placeholder={editingStaff ? 'Để trống nếu không đổi' : 'Nhập mật khẩu...'} />
                         {editingStaff && (
                             <p className="text-xs text-gray-400 mt-1">Bỏ trống nếu không muốn thay đổi mật khẩu</p>
@@ -231,9 +278,9 @@ export default function Staff() {
                             value={formRoleId}
                             onChange={(e) => setFormRoleId(e.target.value)}
                             onMouseLeave={() => setHoveredRole(null)}
-                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/30"
                         >
-                            {MOCK_ROLES.map((r) => (
+                            {roles.map((r) => (
                                 <option key={r.id} value={r.id}>{r.name}</option>
                             ))}
                         </select>
@@ -242,7 +289,7 @@ export default function Staff() {
                             const selectedRole = getRoleById(formRoleId);
                             return selectedRole ? (
                                 <p className="text-xs text-gray-400 mt-1">
-                                    {selectedRole.description} — <span className="font-medium text-primary">{selectedRole.permissions.length} quyền</span>
+                                    {selectedRole.description} — <span className="font-medium text-brand-primary">{selectedRole.permissions.length} quyền</span>
                                 </p>
                             ) : null;
                         })()}

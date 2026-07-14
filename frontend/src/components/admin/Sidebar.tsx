@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard, ShoppingBag, Layers, Truck, Users, BarChart3,
-    Settings, Sparkles, LogOut, FileText, Shield, UserCog,
+    Settings, Sparkles, LogOut, FileText, Shield, UserCog, Tag,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Role } from '@/types/admin.types';
@@ -25,6 +25,7 @@ const NAV_ITEMS: NavItem[] = [
     { id: 'blog', label: 'Blog', path: '/admin/blog', icon: FileText, roles: ['admin'] },
     { id: 'roles', label: 'Phân quyền', path: '/admin/roles', icon: Shield, roles: ['admin'] },
     { id: 'staff', label: 'Nhân viên', path: '/admin/staff', icon: UserCog, roles: ['admin'] },
+    { id: 'saleoff', label: 'Quản lý Sale', path: '/admin/saleoff', icon: Tag, roles: ['admin'] },
 ];
 
 export default function Sidebar() {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search } from 'lucide-react';
+import { Search, BookOpen } from 'lucide-react';
 import type { BlogCategory } from '@/types/user.types';
 
 interface BlogSidebarProps {
@@ -19,7 +19,7 @@ export default function BlogSidebar({
 }: BlogSidebarProps) {
     return (
         <aside className="space-y-8">
-            {/* Search */}
+            {/* Search by title */}
             <div>
                 <h4 className="font-serif text-lg font-bold text-brand-primary mb-3">Tìm kiếm</h4>
                 <div className="relative">
@@ -28,10 +28,23 @@ export default function BlogSidebar({
                         type="text"
                         value={searchQuery}
                         onChange={(e) => onSearchChange(e.target.value)}
-                        placeholder="Tìm bài viết..."
+                        placeholder="Tìm theo tiêu đề bài viết..."
                         className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/30 focus:border-brand-accent transition-all"
                     />
+                    {searchQuery && (
+                        <button
+                            onClick={() => onSearchChange('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+                        >
+                            ✕
+                        </button>
+                    )}
                 </div>
+                {searchQuery && (
+                    <p className="mt-1.5 text-xs text-gray-400">
+                        Đang tìm: <span className="text-brand-accent font-medium">"{searchQuery}"</span>
+                    </p>
+                )}
             </div>
 
             {/* Categories */}
@@ -41,43 +54,43 @@ export default function BlogSidebar({
                     <li>
                         <button
                             onClick={() => onCategoryChange('')}
-                            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all ${activeCategory === ''
+                            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 ${
+                                activeCategory === ''
                                     ? 'bg-brand-accent/10 text-brand-accent font-semibold'
                                     : 'text-gray-600 hover:bg-gray-50 hover:text-brand-primary'
-                                }`}
+                            }`}
                         >
-                            Tất cả
+                            <BookOpen size={14} className="flex-shrink-0" />
+                            Tất cả bài viết
                         </button>
                     </li>
-                    {categories.map((cat) => (
-                        <li key={cat.id}>
-                            <button
-                                onClick={() => onCategoryChange(cat.slug)}
-                                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all ${activeCategory === cat.slug
-                                        ? 'bg-brand-accent/10 text-brand-accent font-semibold'
-                                        : 'text-gray-600 hover:bg-gray-50 hover:text-brand-primary'
+                    {categories.length === 0 ? (
+                        // Skeleton khi chưa load xong categories
+                        Array.from({ length: 4 }).map((_, i) => (
+                            <li key={i}>
+                                <div className="animate-pulse h-9 bg-gray-100 rounded-lg mx-1" />
+                            </li>
+                        ))
+                    ) : (
+                        categories.map((cat) => (
+                            <li key={cat.id}>
+                                <button
+                                    onClick={() => onCategoryChange(cat.slug)}
+                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center justify-between group ${
+                                        activeCategory === cat.slug
+                                            ? 'bg-brand-accent/10 text-brand-accent font-semibold'
+                                            : 'text-gray-600 hover:bg-gray-50 hover:text-brand-primary'
                                     }`}
-                            >
-                                {cat.name}
-                            </button>
-                        </li>
-                    ))}
+                                >
+                                    <span>{cat.name}</span>
+                                    {activeCategory === cat.slug && (
+                                        <span className="w-1.5 h-1.5 rounded-full bg-brand-accent flex-shrink-0" />
+                                    )}
+                                </button>
+                            </li>
+                        ))
+                    )}
                 </ul>
-            </div>
-
-            {/* Tags cloud */}
-            <div>
-                <h4 className="font-serif text-lg font-bold text-brand-primary mb-3">Tags phổ biến</h4>
-                <div className="flex flex-wrap gap-2">
-                    {['xu hướng', 'phối đồ', 'công sở', 'BST mới', 'mẹo', 'hậu trường', 'phối màu'].map((tag) => (
-                        <span
-                            key={tag}
-                            className="inline-block px-3 py-1 bg-gray-50 text-gray-600 text-xs rounded-full border border-gray-200 hover:bg-brand-accent/10 hover:text-brand-accent hover:border-brand-accent/30 transition-all cursor-pointer"
-                        >
-                            #{tag}
-                        </span>
-                    ))}
-                </div>
             </div>
         </aside>
     );

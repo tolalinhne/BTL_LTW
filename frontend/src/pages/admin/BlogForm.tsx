@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Eye, Upload, X, Sparkles } from 'lucide-react';
-import { getBlogById, createBlog, updateBlog, getBlogCategories } from '@/services/admin/blog.service';
+import { adminBlogService } from '@/services/admin/blog.service';
 import type { BlogFormData } from '@/types/admin.types';
 
 function generateSlug(title: string): string {
@@ -32,30 +32,44 @@ export default function BlogForm() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const isEditing = Boolean(id);
-    const categories = useMemo(() => getBlogCategories(), []);
+    const categories = useMemo(() => adminBlogService.getCategories(), []);
 
     const [form, setForm] = useState<BlogFormData>(defaultForm);
     const [tagInput, setTagInput] = useState('');
     const [showPreview, setShowPreview] = useState(false);
     const [toast, setToast] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         if (id) {
-            const existing = getBlogById(id);
+            fetchBlog(id);
+        }
+    }, [id]);
+
+    const fetchBlog = async (blogId: string) => {
+        setIsLoading(true);
+        try {
+            const existing = await adminBlogService.getById(blogId);
             if (existing) {
                 setForm({
                     title: existing.title,
                     slug: existing.slug,
-                    excerpt: existing.excerpt,
+                    excerpt: existing.excerpt || '',
                     content: existing.content,
-                    thumbnail: existing.thumbnail,
+                    thumbnail: existing.thumbnail || '',
                     category: existing.category,
-                    tags: existing.tags,
+                    tags: existing.tags || [],
                     status: existing.status,
                 });
             }
+        } catch (error) {
+            console.error("Lỗi khi tải bài viết", error);
+            showToast("Lỗi tải bài viết");
+        } finally {
+            setIsLoading(false);
         }
-    }, [id]);
+    };
 
     const update = (key: keyof BlogFormData, value: unknown) => {
         setForm((prev) => ({ ...prev, [key]: value }));
@@ -80,14 +94,27 @@ export default function BlogForm() {
         update('tags', form.tags.filter((t) => t !== tag));
     };
 
-    const handleThumbnailUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                update('thumbnail', reader.result as string);
-            };
-            reader.readAsDataURL(file);
+            if (file.size > 10 * 1024 * 1024) {
+                showToast('Ảnh quá lớn! Kích thước tối đa là 10MB.');
+                return;
+            }
+            if (!file.type.startsWith('image/')) {
+                showToast('Chỉ chấp nhận file ảnh (PNG, JPG, WEBP).');
+                return;
+            }
+            try {
+                showToast('Đang tải ảnh lên...');
+                const { uploadService } = await import('@/services/admin/upload.service');
+                const result = await uploadService.uploadImage(file, 'blog');
+                update('thumbnail', result.url);
+                showToast('Tải ảnh thành công!');
+            } catch (error) {
+                console.error("Lỗi upload ảnh", error);
+                showToast("Lỗi upload ảnh. Vui lòng thử lại.");
+            }
         }
     };
 
@@ -96,24 +123,35 @@ export default function BlogForm() {
         setTimeout(() => setToast(''), 3000);
     };
 
-    const handleSave = (status: 'draft' | 'published') => {
+    const handleSave = async (status: 'draft' | 'published') => {
         if (!form.title.trim()) {
             showToast('Vui lòng nhập tiêu đề bài viết');
             return;
         }
 
+        setIsSaving(true);
         const data: BlogFormData = { ...form, status };
 
-        if (isEditing && id) {
-            updateBlog(id, data);
-            showToast('Cập nhật bài viết thành công!');
-        } else {
-            createBlog(data);
-            showToast(status === 'published' ? 'Đã đăng bài viết!' : 'Đã lưu nháp!');
+        try {
+            if (isEditing && id) {
+                await adminBlogService.update(id, data);
+                 showToast('Cập nhật bài viết thành công!');
+            } else {
+                 await adminBlogService.create(data);
+                 showToast(status === 'published' ? 'Đã đăng bài viết!' : 'Đã lưu nháp!');
+            }
+            setTimeout(() => navigate('/admin/blog'), 1000);
+        } catch(error) {
+             console.error("Lỗi khi lưu bài viết", error);
+             showToast("Lỗi khi lưu bài viết");
+        } finally {
+             setIsSaving(false);
         }
-
-        setTimeout(() => navigate('/admin/blog'), 1000);
     };
+
+    if (isLoading) {
+         return <div className="p-8 text-center text-gray-500">Đang tải dữ liệu...</div>;
+    }
 
     return (
         <div className="max-w-5xl mx-auto">
@@ -122,7 +160,7 @@ export default function BlogForm() {
                 <div className="flex items-center gap-3">
                     <button
                         onClick={() => navigate('/admin/blog')}
-                        className="p-2 text-gray-500 hover:text-primary hover:bg-accent-soft rounded-xl transition-all"
+                        className="p-2 text-gray-500 hover:text-brand-primary hover:bg-brand-accent/10 rounded-xl transition-all"
                     >
                         <ArrowLeft size={20} />
                     </button>
@@ -139,7 +177,7 @@ export default function BlogForm() {
                     <button
                         onClick={() => setShowPreview(!showPreview)}
                         className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl border transition-all ${showPreview
-                                ? 'bg-primary text-white border-primary'
+                                ? 'bg-brand-primary text-white border-brand-primary'
                                 : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
                             }`}
                     >
@@ -147,15 +185,17 @@ export default function BlogForm() {
                     </button>
                     <button
                         onClick={() => handleSave('draft')}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all"
+                        disabled={isSaving}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all disabled:opacity-50"
                     >
-                        <Save size={16} /> Lưu nháp
+                        <Save size={16} /> {isSaving ? 'Đang lưu...' : 'Lưu nháp'}
                     </button>
                     <button
                         onClick={() => handleSave('published')}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-primary rounded-xl hover:bg-primary-dark shadow-md shadow-primary/20 transition-all"
+                        disabled={isSaving}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-brand-primary rounded-xl hover:bg-brand-primary/90 shadow-md shadow-brand-primary/20 transition-all disabled:opacity-50"
                     >
-                        <Sparkles size={16} /> Publish
+                        <Sparkles size={16} /> {isSaving ? 'Đang xử lý...' : 'Publish'}
                     </button>
                 </div>
             </div>
@@ -171,7 +211,7 @@ export default function BlogForm() {
                             value={form.title}
                             onChange={(e) => handleTitleChange(e.target.value)}
                             placeholder="Nhập tiêu đề bài viết..."
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/30 focus:border-brand-primary transition-all"
                         />
                         <div className="mt-2 flex items-center gap-2">
                             <span className="text-xs text-gray-400">Slug:</span>
@@ -198,7 +238,7 @@ export default function BlogForm() {
                                 </button>
                             </div>
                         ) : (
-                            <label className="flex flex-col items-center justify-center h-40 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-primary/40 hover:bg-accent-soft/50 transition-all">
+                            <label className="flex flex-col items-center justify-center h-40 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-brand-primary/40 hover:bg-brand-accent/10 transition-all">
                                 <Upload size={24} className="text-gray-300 mb-2" />
                                 <span className="text-sm text-gray-400">Chọn ảnh thumbnail</span>
                                 <input type="file" accept="image/*" onChange={handleThumbnailUpload} className="hidden" />
@@ -213,7 +253,7 @@ export default function BlogForm() {
                             <select
                                 value={form.category}
                                 onChange={(e) => update('category', e.target.value)}
-                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/30 focus:border-brand-primary transition-all"
                             >
                                 <option value="">Chọn danh mục</option>
                                 {categories.map((cat) => (
@@ -230,19 +270,19 @@ export default function BlogForm() {
                                     onChange={(e) => setTagInput(e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
                                     placeholder="Nhập tag..."
-                                    className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                                    className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/30 focus:border-brand-primary transition-all"
                                 />
                                 <button
                                     onClick={handleAddTag}
-                                    className="px-3 py-2.5 bg-primary text-white text-sm rounded-xl hover:bg-primary-dark transition-colors"
+                                    className="px-3 py-2.5 bg-brand-primary text-white text-sm rounded-xl hover:bg-brand-primary/90 transition-colors"
                                 >
                                     +
                                 </button>
                             </div>
-                            {form.tags.length > 0 && (
+                            {form.tags && form.tags.length > 0 && (
                                 <div className="flex flex-wrap gap-1.5 mt-2">
                                     {form.tags.map((tag) => (
-                                        <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-1 bg-accent-soft text-primary text-xs font-medium rounded-lg">
+                                        <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-accent/10 text-brand-primary text-xs font-medium rounded-lg">
                                             #{tag}
                                             <button onClick={() => handleRemoveTag(tag)} className="hover:text-red-500 transition-colors">
                                                 <X size={12} />
@@ -262,7 +302,7 @@ export default function BlogForm() {
                             onChange={(e) => update('excerpt', e.target.value)}
                             placeholder="Mô tả ngắn gọn nội dung bài viết..."
                             rows={3}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand-accent/30 focus:border-brand-primary transition-all"
                         />
                     </div>
 
@@ -276,7 +316,7 @@ export default function BlogForm() {
                             onChange={(e) => update('content', e.target.value)}
                             placeholder="<h2>Tiêu đề</h2>\n<p>Nội dung bài viết...</p>"
                             rows={12}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-brand-accent/30 focus:border-brand-primary transition-all"
                         />
                     </div>
                 </div>
@@ -293,7 +333,7 @@ export default function BlogForm() {
                                 <img src={form.thumbnail} alt="" className="w-full h-40 object-cover rounded-xl mb-4" />
                             )}
                             {form.category && (
-                                <span className="inline-block px-2.5 py-1 bg-primary/10 text-primary text-[11px] font-semibold rounded-full mb-3">
+                                <span className="inline-block px-2.5 py-1 bg-brand-primary/10 text-brand-primary text-[11px] font-semibold rounded-full mb-3">
                                     {form.category}
                                 </span>
                             )}
@@ -304,7 +344,7 @@ export default function BlogForm() {
                                 <p className="text-sm text-gray-500 mb-4 leading-relaxed">{form.excerpt}</p>
                             )}
                             <div
-                                className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-600 prose-blockquote:border-l-primary prose-img:rounded-lg"
+                                className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-600 prose-blockquote:border-l-brand-primary prose-img:rounded-lg"
                                 dangerouslySetInnerHTML={{ __html: form.content || '<p class="text-gray-300 italic">Nội dung sẽ hiển thị ở đây...</p>' }}
                             />
                         </div>

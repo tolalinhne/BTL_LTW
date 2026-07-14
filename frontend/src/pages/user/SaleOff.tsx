@@ -1,20 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { ChevronDown } from 'lucide-react';
+import { useParams } from 'react-router-dom';
+import { ChevronDown, Tag, ChevronLeft, ChevronRight } from 'lucide-react';
 import ProductCard from '@/components/user/ProductCard';
+import api from '@/services/api';
+import { getActiveSales } from '@/services/admin/sale.service';
 import type { Product } from '@/types/user.types';
-
-// Mock sale products
-const SALE_PRODUCTS: Product[] = [
-    { id: 's1', name: 'LiLi Basic Polo', price: 249000, originalPrice: 350000, image: 'https://picsum.photos/seed/polo1/600/800', category: 'Tops', colors: ['#f8d7da', '#ffffff', '#007bff'], isSale: true, discount: 40 },
-    { id: 's2', name: 'Summer Floral Dress', price: 520000, originalPrice: 850000, image: 'https://picsum.photos/seed/sdress1/600/800', category: 'Dresses', colors: ['#f8d7da'], isSale: true, discount: 35 },
-    { id: 's3', name: 'Classic Linen Pants', price: 380000, originalPrice: 580000, image: 'https://picsum.photos/seed/pants1/600/800', category: 'Pants', colors: ['#d4a574', '#1a1a1a'], isSale: true, discount: 30 },
-    { id: 's4', name: 'Elegant Silk Blouse', price: 450000, originalPrice: 750000, image: 'https://picsum.photos/seed/silk1/600/800', category: 'Tops', colors: ['#ffffff', '#e2e3e5'], isSale: true, discount: 40 },
-    { id: 's5', name: 'Boho Maxi Skirt', price: 320000, originalPrice: 520000, image: 'https://picsum.photos/seed/skirt1/600/800', category: 'Dresses', colors: ['#f0e68c'], isSale: true, discount: 38 },
-    { id: 's6', name: 'Signature Tote Bag', price: 220000, originalPrice: 320000, image: 'https://picsum.photos/seed/bag1/600/800', category: 'Accessories', colors: ['#8b4513'], isSale: true, discount: 30 },
-    { id: 's7', name: 'Wide Leg Trousers', price: 290000, originalPrice: 480000, image: 'https://picsum.photos/seed/trousers1/600/800', category: 'Pants', colors: ['#1a1a1a', '#f5f5dc'], isSale: true, discount: 40 },
-    { id: 's8', name: 'Pearl Earrings Set', price: 150000, originalPrice: 250000, image: 'https://picsum.photos/seed/earring1/600/800', category: 'Accessories', colors: ['#ffd700'], isSale: true, discount: 40 },
-];
+import type { SaleItem } from '@/services/admin/sale.service';
 
 // Tab config: label, slug (for URL), category filter
 const SALE_TABS: { label: string; slug: string | null; category: string | null }[] = [
@@ -33,115 +24,213 @@ const DISCOUNT_RANGES = [
 
 const SIZES = ['S', 'M', 'L', 'XL'];
 
+// Enrich products with sale info (isSale, salePrice, discountPercent)
+function enrichWithSaleData(products: Product[], activeSales: SaleItem[]): Product[] {
+    // Build map: productId → best discountPercent
+    const saleMap = new Map<number, number>();
+    for (const sale of activeSales) {
+        for (const pid of sale.productIds) {
+            const existing = saleMap.get(pid) || 0;
+            if (sale.discountPercent > existing) {
+                saleMap.set(pid, sale.discountPercent);
+            }
+        }
+    }
+    return products.map((p) => {
+        const discountPct = saleMap.get(Number(p.id));
+        if (discountPct && discountPct > 0) {
+            const salePrice = Math.round(p.price * (1 - discountPct / 100));
+            return { ...p, isSale: true, discount: discountPct, discountPercent: discountPct, salePrice };
+        }
+        return p;
+    });
+}
+
 export default function SaleOff() {
     const { category } = useParams<{ category?: string }>();
-    const [timeLeft, setTimeLeft] = useState({ hours: 2, minutes: 14, seconds: 35 });
+    const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 });
     const [selectedDiscounts, setSelectedDiscounts] = useState<number[]>([]);
     const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
+    const [saleProducts, setSaleProducts] = useState<Product[]>([]);
+    const [activeSales, setActiveSales] = useState<SaleItem[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
+    const ITEMS_PER_PAGE = 9;
 
-    // Dynamic price bounds from actual products
-    const minPrice = useMemo(() => Math.min(...SALE_PRODUCTS.map((p) => p.price)), []);
-    const maxPrice = useMemo(() => Math.max(...SALE_PRODUCTS.map((p) => p.price)), []);
+    useEffect(() => {
+        const fetchSaleProducts = async () => {
+            setLoading(true);
+            try {
+                const [salesData, productsRes] = await Promise.all([
+                    getActiveSales(),
+                    api.get('/products', { params: { sort: 'newest', limit: 200 } }),
+                ]);
+                setActiveSales(salesData);
+
+                const prodData = productsRes.data?.data?.data || productsRes.data?.data?.items || productsRes.data?.data || [];
+                const all: Product[] = Array.isArray(prodData) ? prodData : [];
+
+                // Filter to only products in active sales
+                const saleProductIds = new Set<number>();
+                for (const sale of salesData) {
+                    for (const pid of sale.productIds) saleProductIds.add(pid);
+                }
+                const onSale = all.filter((p) => saleProductIds.has(Number(p.id)));
+                setSaleProducts(enrichWithSaleData(onSale, salesData));
+            } catch (e) {
+                console.error('Failed to fetch sale products:', e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchSaleProducts();
+    }, []);
+
+    const minPrice = useMemo(() => saleProducts.length > 0 ? Math.min(...saleProducts.map((p) => p.salePrice ?? p.price)) : 0, [saleProducts]);
+    const maxPrice = useMemo(() => saleProducts.length > 0 ? Math.max(...saleProducts.map((p) => p.salePrice ?? p.price)) : 1000000, [saleProducts]);
     const [priceRange, setPriceRange] = useState(maxPrice);
-
-    // Reset price range when maxPrice changes
     useEffect(() => { setPriceRange(maxPrice); }, [maxPrice]);
 
-    // Active tab index from URL param
     const activeTabIdx = useMemo(() => {
         if (!category) return 0;
         const idx = SALE_TABS.findIndex((t) => t.slug === category);
         return idx >= 0 ? idx : 0;
     }, [category]);
 
+    // Tính countdown từ endTime của sale active sớm kết thúc nhất
     useEffect(() => {
+        if (activeSales.length === 0) return;
+
+        // Tìm endTime sớm nhất trong các sale đang active
+        const earliest = activeSales
+            .filter((s) => s.endTime)
+            .map((s) => new Date(s.endTime!).getTime())
+            .filter((t) => t > Date.now())
+            .sort((a, b) => a - b)[0];
+
+        // Nếu không có endTime hợp lệ, fallback về 24h tới
+        const target = earliest ?? (Date.now() + 24 * 3600 * 1000);
+
+        const calcLeft = () => {
+            const diff = Math.max(0, target - Date.now());
+            return {
+                hours: Math.floor(diff / 3600000),
+                minutes: Math.floor((diff % 3600000) / 60000),
+                seconds: Math.floor((diff % 60000) / 1000),
+            };
+        };
+
+        setTimeLeft(calcLeft());
         const timer = setInterval(() => {
-            setTimeLeft((prev) => {
-                if (prev.seconds > 0) return { ...prev, seconds: prev.seconds - 1 };
-                if (prev.minutes > 0) return { ...prev, minutes: prev.minutes - 1, seconds: 59 };
-                if (prev.hours > 0) return { ...prev, hours: prev.hours - 1, minutes: 59, seconds: 59 };
-                return prev;
-            });
+            const left = calcLeft();
+            setTimeLeft(left);
+            if (left.hours === 0 && left.minutes === 0 && left.seconds === 0) {
+                clearInterval(timer);
+            }
         }, 1000);
         return () => clearInterval(timer);
-    }, []);
+    }, [activeSales]);
 
     const toggleDiscount = (idx: number) => {
-        setSelectedDiscounts((prev) =>
-            prev.includes(idx) ? prev.filter((i) => i !== idx) : [...prev, idx]
-        );
+        setSelectedDiscounts((prev) => prev.includes(idx) ? prev.filter((i) => i !== idx) : [...prev, idx]);
     };
-
     const toggleSize = (size: string) => {
-        setSelectedSizes((prev) =>
-            prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size]
-        );
+        setSelectedSizes((prev) => prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size]);
     };
 
     const filteredProducts = useMemo(() => {
-        let products = SALE_PRODUCTS;
-
-        // Filter by category (from URL)
+        let products = saleProducts;
         const tabCategory = SALE_TABS[activeTabIdx].category;
-        if (tabCategory) {
-            products = products.filter((p) => p.category === tabCategory);
-        }
-
-        // Filter by discount range
+        if (tabCategory) products = products.filter((p) => p.category === tabCategory);
         if (selectedDiscounts.length > 0) {
             products = products.filter((p) => {
-                const d = p.discount || 0;
+                const d = p.discountPercent || p.discount || 0;
                 return selectedDiscounts.some((idx) => {
                     const range = DISCOUNT_RANGES[idx];
                     return d >= range.min && d <= range.max;
                 });
             });
         }
-
-        // Filter by price
-        products = products.filter((p) => p.price <= priceRange);
-
+        products = products.filter((p) => (p.salePrice ?? p.price) <= priceRange);
         return products;
-    }, [activeTabIdx, selectedDiscounts, priceRange]);
+    }, [saleProducts, activeTabIdx, selectedDiscounts, priceRange, selectedSizes]);
 
+    // Reset pagination when filter changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [activeTabIdx, selectedDiscounts, priceRange, selectedSizes]);
+
+    const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
+    const paginatedProducts = useMemo(() => {
+        const start = (currentPage - 1) * ITEMS_PER_PAGE;
+        return filteredProducts.slice(start, start + ITEMS_PER_PAGE);
+    }, [filteredProducts, currentPage]);
+
+    // Best coupon code to display
+    const bestCoupon = useMemo(() =>
+        activeSales.filter((s) => s.couponCode).sort((a, b) => b.discountPercent - a.discountPercent)[0] || null,
+        [activeSales]
+    );
+
+    const maxDiscount = activeSales.length > 0 ? Math.max(...activeSales.map((s) => s.discountPercent)) : 50;
     const formatVND = (n: number) => new Intl.NumberFormat('vi-VN').format(n) + ' ₫';
+
+    // Dynamic banner info từ sale đang active
+    const activeSaleName = useMemo(() => {
+        const named = activeSales.find((s) => s.name);
+        return named?.name || 'Flash Sale';
+    }, [activeSales]);
+
+    const activeSaleEndDate = useMemo(() => {
+        const earliest = activeSales
+            .filter((s) => s.endTime)
+            .map((s) => new Date(s.endTime!))
+            .filter((d) => d.getTime() > Date.now())
+            .sort((a, b) => a.getTime() - b.getTime())[0];
+        return earliest ?? null;
+    }, [activeSales]);
+
+    const bannerSeed = useMemo(() => {
+        // Dùng tên sale để tạo seed ngẫu nhiên nhưng ổn định theo đợt sale
+        const seed = activeSaleName.replace(/\s+/g, '').toLowerCase() || 'salebanner';
+        return seed;
+    }, [activeSaleName]);
 
     return (
         <div className="pb-20">
-            {/* Sale Banner */}
+            {/* Sale Banner - Dynamic */}
             <section className="relative h-[60vh] overflow-hidden">
                 <img
-                    src="https://picsum.photos/seed/salebanner/1920/1080"
-                    alt="Sale Banner"
+                    src={`https://picsum.photos/seed/${bannerSeed}/1920/1080`}
+                    alt={activeSaleName}
                     className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
                 />
-                <div className="absolute inset-0 bg-black/20 flex flex-col items-center justify-center text-white text-center px-4">
-                    <p className="text-sm font-medium uppercase tracking-[0.3em] mb-4">End of Season</p>
-                    <h1 className="text-7xl md:text-9xl font-serif mb-4 tracking-tighter">SALE</h1>
+                <div className="absolute inset-0 bg-black/30 flex flex-col items-center justify-center text-white text-center px-4">
+                    {activeSaleEndDate ? (
+                        <p className="text-sm font-medium uppercase tracking-[0.3em] mb-4 bg-white/10 px-4 py-1 rounded-full">
+                            Kết thúc: {activeSaleEndDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                        </p>
+                    ) : (
+                        <p className="text-sm font-medium uppercase tracking-[0.3em] mb-4">End of Season</p>
+                    )}
+                    <h1 className="text-5xl md:text-8xl font-serif mb-3 tracking-tighter">{activeSaleName}</h1>
                     <div className="flex items-center gap-4 text-2xl md:text-4xl font-serif">
                         <span>UP TO</span>
-                        <span className="text-6xl md:text-8xl font-bold">50%</span>
+                        <span className="text-6xl md:text-8xl font-bold">{maxDiscount}%</span>
                         <span>OFF</span>
                     </div>
                 </div>
             </section>
 
-            {/* Tabs — URL-based navigation */}
-            <div className="max-w-7xl mx-auto px-4 py-8 border-b border-black/5">
-                <div className="flex items-center justify-center gap-8 overflow-x-auto hide-scrollbar">
-                    {SALE_TABS.map((tab, idx) => (
-                        <Link
-                            key={tab.label}
-                            to={tab.slug ? `/saleoff/${tab.slug}` : '/saleoff'}
-                            className={`text-sm font-bold uppercase tracking-widest pb-2 border-b-2 transition-all whitespace-nowrap ${idx === activeTabIdx ? 'text-red-500 border-red-500' : 'text-gray-400 border-transparent hover:text-brand-primary'
-                                }`}
-                        >
-                            {tab.label}
-                        </Link>
-                    ))}
+            {/* Coupon banner */}
+            {bestCoupon && (
+                <div className="bg-red-500 text-white py-3 text-center text-sm font-medium">
+                    <Tag size={14} className="inline mr-2" />
+                    Dùng mã <strong className="font-mono bg-white/20 px-2 py-0.5 rounded mx-1">{bestCoupon.couponCode}</strong>
+                    để giảm thêm {bestCoupon.discountPercent}%!
                 </div>
-            </div>
+            )}
 
             <div className="max-w-7xl mx-auto px-4 py-12">
                 {/* Flash Sale Countdown */}
@@ -162,7 +251,6 @@ export default function SaleOff() {
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-12">
                     {/* Sidebar Filters */}
                     <aside className="hidden lg:block space-y-12">
-                        {/* Discount filter */}
                         <div>
                             <h3 className="text-sm font-bold uppercase tracking-widest mb-6 flex items-center justify-between">
                                 Mức giảm <ChevronDown size={16} />
@@ -182,10 +270,9 @@ export default function SaleOff() {
                             </div>
                         </div>
 
-                        {/* Price filter — dynamic bounds */}
                         <div>
                             <h3 className="text-sm font-bold uppercase tracking-widest mb-6 flex items-center justify-between">
-                                Khoảng giá <ChevronDown size={16} />
+                                Giá sale <ChevronDown size={16} />
                             </h3>
                             <div className="space-y-4">
                                 <input
@@ -204,7 +291,6 @@ export default function SaleOff() {
                             </div>
                         </div>
 
-                        {/* Size filter */}
                         <div>
                             <h3 className="text-sm font-bold uppercase tracking-widest mb-6 flex items-center justify-between">
                                 Kích cỡ <ChevronDown size={16} />
@@ -224,7 +310,6 @@ export default function SaleOff() {
                             </div>
                         </div>
 
-                        {/* Reset filters */}
                         {(selectedDiscounts.length > 0 || selectedSizes.length > 0 || priceRange < maxPrice) && (
                             <button
                                 onClick={() => { setSelectedDiscounts([]); setSelectedSizes([]); setPriceRange(maxPrice); }}
@@ -237,21 +322,82 @@ export default function SaleOff() {
 
                     {/* Product Grid */}
                     <div className="lg:col-span-3">
-                        {filteredProducts.length > 0 ? (
+                        {loading ? (
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-12">
-                                {filteredProducts.map((product) => (
-                                    <div key={product.id} className="relative">
-                                        <ProductCard product={product} />
-                                        <div className="absolute top-3 right-3 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-full">
-                                            -{product.discount}%
-                                        </div>
+                                {Array.from({ length: 6 }).map((_, i) => (
+                                    <div key={i} className="animate-pulse">
+                                        <div className="aspect-[3/4] bg-gray-200 rounded-2xl mb-3" />
+                                        <div className="h-3 bg-gray-200 rounded w-1/2 mb-2" />
+                                        <div className="h-4 bg-gray-200 rounded w-3/4" />
                                     </div>
                                 ))}
                             </div>
+                        ) : paginatedProducts.length > 0 ? (
+                            <>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-12">
+                                    {paginatedProducts.map((product) => (
+                                        <div key={product.id} className="relative">
+                                            <ProductCard product={product} />
+                                            <div className="absolute top-3 right-3 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-full">
+                                                -{product.discountPercent || product.discount}%
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                
+                                {/* Phân trang */}
+                                {totalPages > 1 && (
+                                    <div className="mt-16 flex items-center justify-center gap-2">
+                                        <button
+                                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                            disabled={currentPage === 1}
+                                            className="w-10 h-10 flex items-center justify-center rounded-full border border-gray-200 text-gray-500 disabled:opacity-50 hover:border-brand-accent hover:text-brand-accent transition-colors"
+                                        >
+                                            <ChevronLeft size={20} />
+                                        </button>
+                                        
+                                        {Array.from({ length: totalPages }).map((_, idx) => {
+                                            const page = idx + 1;
+                                            // Chỉ hiển thị tối đa 5 trang xung quanh trang hiện tại để chống tràn
+                                            if (totalPages > 5 && Math.abs(page - currentPage) > 2 && page !== 1 && page !== totalPages) {
+                                                if (page === 2 || page === totalPages - 1) {
+                                                    return <span key={page} className="px-1 text-gray-400">...</span>;
+                                                }
+                                                return null;
+                                            }
+                                            return (
+                                                <button
+                                                    key={page}
+                                                    onClick={() => setCurrentPage(page)}
+                                                    className={`w-10 h-10 flex items-center justify-center rounded-full text-sm font-medium transition-colors ${
+                                                        currentPage === page
+                                                            ? 'bg-brand-accent text-white'
+                                                            : 'border border-gray-200 text-gray-600 hover:border-brand-accent hover:text-brand-accent'
+                                                    }`}
+                                                >
+                                                    {page}
+                                                </button>
+                                            );
+                                        })}
+
+                                        <button
+                                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                            disabled={currentPage === totalPages}
+                                            className="w-10 h-10 flex items-center justify-center rounded-full border border-gray-200 text-gray-500 disabled:opacity-50 hover:border-brand-accent hover:text-brand-accent transition-colors"
+                                        >
+                                            <ChevronRight size={20} />
+                                        </button>
+                                    </div>
+                                )}
+                            </>
                         ) : (
                             <div className="text-center py-20">
-                                <p className="text-lg font-medium text-gray-600 mb-2">Không tìm thấy sản phẩm</p>
-                                <p className="text-sm text-gray-400">Thử thay đổi bộ lọc hoặc danh mục khác</p>
+                                <p className="text-lg font-medium text-gray-600 mb-2">
+                                    {activeSales.length === 0 ? 'Hiện chưa có chương trình sale nào' : 'Không tìm thấy sản phẩm'}
+                                </p>
+                                <p className="text-sm text-gray-400">
+                                    {activeSales.length === 0 ? 'Quay lại sau để không bỏ lỡ ưu đãi nhé!' : 'Thử thay đổi bộ lọc hoặc danh mục khác'}
+                                </p>
                             </div>
                         )}
                     </div>

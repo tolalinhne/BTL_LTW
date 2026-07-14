@@ -10,6 +10,7 @@ export interface User {
     address?: string;
     role: Role;
     avatar?: string;
+    permissions?: string[];
 }
 
 export interface LoginCredentials {
@@ -25,19 +26,22 @@ export interface RegisterData {
 }
 
 export interface AuthResponse {
+    accessToken: string;
+    refreshToken: string;
     user: User;
-    token: string;
 }
 
 // ===== Product (base) =====
 export interface Product {
     id: string;
     name: string;
+    slug?: string;
     sku?: string;
     price: number;
     originalPrice?: number;
     image: string;
     category: string;
+    variants?: { color: string; colorHex?: string; size: string; stock: number }[];
 }
 
 // ===== Category (base) =====
@@ -61,22 +65,34 @@ export interface Address {
 export interface OrderItem {
     productId: string;
     productName: string;
-    productImage: string;
+    productImage?: string;
+    image?: string;
     price: number;
     quantity: number;
     size: string;
     color: string;
 }
 
+export interface OrderShippingAddress {
+    fullName: string;
+    phone: string;
+    street: string;
+    ward: string;
+    district: string;
+    city: string;
+}
+
 export interface Order {
     id: string;
     items: OrderItem[];
-    total: number;
-    status: 'pending' | 'confirmed' | 'shipping' | 'delivered' | 'cancelled';
-    shippingAddress: string;
-    customerName: string;
-    customerPhone: string;
+    subTotal: number;
+    shippingFee: number;
+    discountAmount: number;
+    totalAmount: number;
+    status: 'pending' | 'processing' | 'confirmed' | 'shipping' | 'delivered' | 'cancelled' | 'refunded';
+    shippingAddress: OrderShippingAddress;
     paymentMethod: string;
+    note?: string;
     createdAt: string;
 }
 

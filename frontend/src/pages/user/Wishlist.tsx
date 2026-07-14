@@ -6,8 +6,20 @@ import { useCart } from '@/contexts/CartContext';
 import { formatPrice } from '@/utils/formatPrice';
 
 export default function Wishlist() {
-    const { wishlist, removeFromWishlist } = useWishlist();
+    const { wishlist, removeFromWishlist, isLoading } = useWishlist();
     const { addToCart } = useCart();
+
+    if (isLoading) {
+        return (
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
+                <div className="animate-pulse flex flex-col items-center">
+                    <div className="w-16 h-16 bg-gray-200 rounded-full mb-4"></div>
+                    <div className="w-64 h-8 bg-gray-200 rounded-lg mb-2"></div>
+                    <div className="w-48 h-4 bg-gray-200 rounded-lg"></div>
+                </div>
+            </div>
+        );
+    }
 
     if (wishlist.length === 0) {
         return (
@@ -32,8 +44,8 @@ export default function Wishlist() {
             </h1>
 
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                {wishlist.map((product) => (
-                    <div key={product.id} className="group bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                {wishlist.map((product, index) => (
+                    <div key={`${product.id}-${index}`} className="group bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                         <Link to={`/product/${product.id}`} className="block aspect-[3/4] overflow-hidden bg-gray-100">
                             <img
                                 src={product.image}
@@ -51,7 +63,7 @@ export default function Wishlist() {
                             <div className="flex gap-2 mt-3">
                                 <button
                                     onClick={() => {
-                                        addToCart(product, 1, product.sizes?.[0] || 'M', product.colors[0]);
+                                        addToCart(product, 1, product.sizes?.[0] || 'M', product.colors?.[0] || 'Black');
                                         removeFromWishlist(product.id);
                                     }}
                                     className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-brand-primary text-white text-xs font-semibold rounded-full hover:bg-brand-primary/90 transition-colors"
